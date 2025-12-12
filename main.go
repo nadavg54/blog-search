@@ -2,18 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"blog-search/pkg/db"
-	"blog-search/pkg/domain"
-	"blog-search/pkg/extractor"
+	"blog-search/pkg/manager"
 	"blog-search/pkg/sitemap"
 )
 
@@ -42,6 +37,15 @@ func main() {
 		log.Fatal("No valid entries found after filtering base URLs")
 	}
 
+	// Limit to first 1000 entries
+	maxEntries := 1000
+	if len(filteredEntries) < maxEntries {
+		maxEntries = len(filteredEntries)
+	}
+	filteredEntries = filteredEntries[:maxEntries]
+
+	log.Printf("Processing %d articles...", maxEntries)
+
 	// Initialize database client
 	dbClient := db.NewClient("mongodb://admin:password@localhost:27017", "blogsearch", "articles")
 	ctx := context.Background()
@@ -51,61 +55,21 @@ func main() {
 	}
 	defer dbClient.Close(ctx)
 
-	// Take the first entry
-	entry := filteredEntries[0]
-	fmt.Printf("Processing entry: %s\n", entry.Location)
-
-	// Fetch HTML content
-	htmlContent, err := fetchHTML(entry.Location)
-	if err != nil {
-		log.Fatalf("Failed to fetch HTML: %v", err)
+	// Extract URLs from entries
+	urls := make([]string, 0, len(filteredEntries))
+	for _, entry := range filteredEntries {
+		urls = append(urls, entry.Location)
 	}
 
-	// Extract text and title
-	text, err := extractor.ExtractText(htmlContent)
-	if err != nil {
-		log.Fatalf("Failed to extract text: %v", err)
+	// Create manager with 10 workers
+	mgr := manager.NewManager(10, dbClient)
+
+	// Process all URLs
+	if err := mgr.ProcessURLs(ctx, urls); err != nil {
+		log.Fatalf("Failed to process URLs: %v", err)
 	}
 
-	title, err := extractor.ExtractTitle(htmlContent)
-	if err != nil {
-		log.Fatalf("Failed to extract title: %v", err)
-	}
-
-	// Create article document
-	article := &domain.Article{
-		URL:       entry.Location,
-		Title:     title,
-		Text:      text,
-		CrawledAt: time.Now(),
-	}
-
-	// Save to database
-	if err := dbClient.SaveArticle(ctx, article); err != nil {
-		log.Fatalf("Failed to save article: %v", err)
-	}
-
-	fmt.Printf("Successfully saved article: %s\n", title)
-}
-
-// fetchHTML fetches HTML content from a URL
-func fetchHTML(url string) (string, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch URL: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return string(body), nil
+	log.Println("All done!")
 }
 
 // filterBaseURLs filters out base/root URLs that shouldn't be crawled
