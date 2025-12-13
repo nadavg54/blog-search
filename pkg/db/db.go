@@ -67,3 +67,36 @@ func (c *Client) SaveArticle(ctx context.Context, article *domain.Article) error
 	_, err := c.collection.UpdateOne(ctx, filter, update, opts)
 	return err
 }
+
+// GetAllURLs fetches all URLs from the database and returns them as a map (set)
+func (c *Client) GetAllURLs(ctx context.Context) (map[string]bool, error) {
+	if c.collection == nil {
+		return nil, fmt.Errorf("collection not initialized")
+	}
+
+	// Query to get only the URL field from all documents
+	cursor, err := c.collection.Find(ctx, bson.M{}, options.Find().SetProjection(bson.M{"url": 1, "_id": 0}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query URLs: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	urlSet := make(map[string]bool)
+	for cursor.Next(ctx) {
+		var result struct {
+			URL string `bson:"url"`
+		}
+		if err := cursor.Decode(&result); err != nil {
+			continue // Skip invalid documents
+		}
+		if result.URL != "" {
+			urlSet[result.URL] = true
+		}
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+
+	return urlSet, nil
+}

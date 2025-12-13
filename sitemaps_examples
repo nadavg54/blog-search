@@ -1,0 +1,156 @@
+1. Meta Engineering
+
+Base: https://engineering.fb.com
+
+Sitemap: https://engineering.fb.com/sitemap_index.xml
+
+2. Google Developers Blog
+
+Base: https://developers.googleblog.com
+
+RSS: https://developers.googleblog.com/feeds/posts/default
+
+Sitemap: https://developers.googleblog.com/sitemap.xml
+
+3. Netflix Tech Blog
+
+Base: https://netflixtechblog.com
+
+RSS: https://netflixtechblog.com/feed
+
+(No sitemap, Medium-hosted — but still scrapeable)
+
+4. Uber Engineering
+
+Base: https://www.uber.com/en-IL/blog/engineering/
+
+RSS: https://eng.uber.com/feed/
+
+Sitemap: https://www.uber.com/sitemap.xml
+
+5. Airbnb Engineering
+
+Base: https://medium.com/airbnb-engineering
+
+RSS: https://medium.com/feed/airbnb-engineering
+
+(Medium-hosted)
+
+6. Pinterest Engineering
+
+Base: https://medium.com/pinterest-engineering
+
+RSS: https://medium.com/feed/pinterest-engineering
+
+7. LinkedIn Engineering
+
+Base: https://engineering.linkedin.com/blog
+
+RSS: https://engineering.linkedin.com/blog.rss
+
+Sitemap: https://engineering.linkedin.com/sitemap.xml
+
+8. Stripe Engineering
+
+Base: https://stripe.com/blog/engineering
+
+RSS: https://stripe.com/blog/rss
+
+(No sitemap)
+
+9. GitHub Engineering
+
+Base: https://github.blog/category/engineering/
+
+Sitemap: https://github.blog/sitemap.xml
+
+10. Cloudflare Blog
+
+Base: https://blog.cloudflare.com
+
+RSS: https://blog.cloudflare.com/rss/
+
+Sitemap: https://blog.cloudflare.com/sitemap.xml
+
+🚀 More great engineering blogs with sitemaps
+11. Spotify Engineering
+
+Base: https://engineering.atspotify.com
+
+RSS: https://engineering.atspotify.com/feed/
+
+Sitemap: https://engineering.atspotify.com/sitemap.xml
+
+12. Slack Engineering
+
+Base: https://slack.engineering
+
+RSS: https://slack.engineering/feed/
+
+Sitemap: https://slack.engineering/sitemap.xml
+
+13. Dropbox Tech Blog
+
+Base: https://dropbox.tech
+
+RSS: https://dropbox.tech/feed.xml
+
+Sitemap: (if available) https://dropbox.tech/sitemap.xml
+
+14. Cloud Native Computing Foundation (CNCF Blog)
+
+Base: https://www.cncf.io/blog/
+
+RSS: https://www.cncf.io/feed/
+
+Sitemap: https://www.cncf.io/sitemap.xml
+
+15. Red Hat Blog / Engineering Posts
+
+Base: https://www.redhat.com/en/blog
+
+RSS: https://www.redhat.com/en/rss/blog
+
+Sitemap: https://www.redhat.com/en/sitemap.xml
+
+🧩 Specialized Engineering Blogs
+16. Datadog Engineering
+
+Base: https://www.datadoghq.com/blog/engineering/
+
+Sitemap: https://www.datadoghq.com/sitemap.xml
+
+17. AWS Architecture Blog
+
+Base: https://aws.amazon.com/blogs/architecture/
+
+RSS: https://aws.amazon.com/blogs/architecture/feed/
+
+Sitemap: https://aws.amazon.com/sitemap.xml
+
+18. Microsoft Engineering
+
+Base: https://devblogs.microsoft.com/engineering-community/
+
+RSS: https://devblogs.microsoft.com/feed/
+
+Sitemap varies by subdomain
+
+19. DigitalOcean Engineering
+
+Base: https://www.digitalocean.com/blog/tag/engineering
+
+RSS: https://www.digitalocean.com/blog/feed/
+
+Sitemap: https://www.digitalocean.com/sitemap.xml
+
+20. Shopify Engineering
+
+Base: https://shopify.engineering
+
+RSS: https://shopify.engineering/rss
+
+Sitemap: https://shopify.engineering/sitemap.xml
+
+Sitemap: https://blog.x.com/en_us.sitemap.xml
+
