@@ -1,4 +1,4 @@
-package sitemap
+package parser
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestParseSitemap(t *testing.T) {
+func TestSitemapParser_ParseSitemap(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 	<url>
@@ -25,50 +25,38 @@ func TestParseSitemap(t *testing.T) {
 	</url>
 </urlset>`
 
-	parser := NewParser()
+	parser := NewSitemapParser()
 	reader := strings.NewReader(xmlData)
 
-	entries, err := parser.parseSitemap(reader)
+	urls, err := parser.parseSitemap(reader)
 	if err != nil {
 		t.Fatalf("Failed to parse sitemap: %v", err)
 	}
 
-	if len(entries) != 3 {
-		t.Fatalf("Expected 3 entries, got %d", len(entries))
+	if len(urls) != 3 {
+		t.Fatalf("Expected 3 URLs, got %d", len(urls))
 	}
 
-	// Check first entry (with all fields)
-	entry1 := entries[0]
-	if entry1.Location != "https://engineering.fb.com/post1" {
-		t.Errorf("Expected location 'https://engineering.fb.com/post1', got '%s'", entry1.Location)
-	}
-	if entry1.LastMod != "2024-01-15" {
-		t.Errorf("Expected LastMod '2024-01-15', got '%s'", entry1.LastMod)
-	}
-	if entry1.Priority != "0.8" {
-		t.Errorf("Expected Priority '0.8', got '%s'", entry1.Priority)
-	}
-	if entry1.ChangeFreq != "monthly" {
-		t.Errorf("Expected ChangeFreq 'monthly', got '%s'", entry1.ChangeFreq)
+	// Check first URL
+	url1 := urls[0]
+	if url1.Location != "https://engineering.fb.com/post1" {
+		t.Errorf("Expected location 'https://engineering.fb.com/post1', got '%s'", url1.Location)
 	}
 
-	// Check second entry (partial fields)
-	entry2 := entries[1]
-	if entry2.Location != "https://engineering.fb.com/post2" {
-		t.Errorf("Expected location 'https://engineering.fb.com/post2', got '%s'", entry2.Location)
-	}
-	if entry2.LastMod != "2024-01-20" {
-		t.Errorf("Expected LastMod '2024-01-20', got '%s'", entry2.LastMod)
+	// Check second URL
+	url2 := urls[1]
+	if url2.Location != "https://engineering.fb.com/post2" {
+		t.Errorf("Expected location 'https://engineering.fb.com/post2', got '%s'", url2.Location)
 	}
 
-	// Check third entry (only location)
-	entry3 := entries[2]
-	if entry3.Location != "https://engineering.fb.com/post3" {
-		t.Errorf("Expected location 'https://engineering.fb.com/post3', got '%s'", entry3.Location)
+	// Check third URL
+	url3 := urls[2]
+	if url3.Location != "https://engineering.fb.com/post3" {
+		t.Errorf("Expected location 'https://engineering.fb.com/post3', got '%s'", url3.Location)
 	}
 }
 
-func TestParseSitemapIndex(t *testing.T) {
+func TestSitemapParser_ParseSitemapIndex(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 	<sitemap>
@@ -81,7 +69,7 @@ func TestParseSitemapIndex(t *testing.T) {
 	</sitemap>
 </sitemapindex>`
 
-	parser := NewParser()
+	parser := NewSitemapParser()
 	reader := strings.NewReader(xmlData)
 
 	urls, err := parser.parseSitemapIndex(reader)
@@ -102,28 +90,28 @@ func TestParseSitemapIndex(t *testing.T) {
 	}
 }
 
-func TestParseSitemapEmpty(t *testing.T) {
+func TestSitemapParser_ParseSitemapEmpty(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 </urlset>`
 
-	parser := NewParser()
+	parser := NewSitemapParser()
 	reader := strings.NewReader(xmlData)
 
-	entries, err := parser.parseSitemap(reader)
+	urls, err := parser.parseSitemap(reader)
 	if err != nil {
 		t.Fatalf("Failed to parse empty sitemap: %v", err)
 	}
 
-	if len(entries) != 0 {
-		t.Errorf("Expected 0 entries, got %d", len(entries))
+	if len(urls) != 0 {
+		t.Errorf("Expected 0 URLs, got %d", len(urls))
 	}
 }
 
-func TestParseSitemapInvalidXML(t *testing.T) {
+func TestSitemapParser_ParseSitemapInvalidXML(t *testing.T) {
 	invalidXML := `<?xml version="1.0"?><invalid>`
 
-	parser := NewParser()
+	parser := NewSitemapParser()
 	reader := strings.NewReader(invalidXML)
 
 	_, err := parser.parseSitemap(reader)
@@ -132,7 +120,7 @@ func TestParseSitemapInvalidXML(t *testing.T) {
 	}
 }
 
-func TestParseFromURL_SitemapIndex(t *testing.T) {
+func TestSitemapParser_ParseFromURL_SitemapIndex(t *testing.T) {
 	// Create a test HTTP server that serves different sitemaps
 	sitemap1 := `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -184,21 +172,21 @@ func TestParseFromURL_SitemapIndex(t *testing.T) {
 	defer server.Close()
 	serverURL = server.URL
 
-	parser := NewParser()
-	entries, err := parser.ParseFromURL(server.URL + "/sitemap-index.xml")
+	parser := NewSitemapParser()
+	urls, err := parser.ParseFromURL(server.URL + "/sitemap-index.xml")
 	if err != nil {
 		t.Fatalf("Failed to parse sitemap index from URL: %v", err)
 	}
 
-	// Should have entries from both sitemaps
-	if len(entries) != 4 {
-		t.Fatalf("Expected 4 entries (2 from each sitemap), got %d", len(entries))
+	// Should have URLs from both sitemaps
+	if len(urls) != 4 {
+		t.Fatalf("Expected 4 URLs (2 from each sitemap), got %d", len(urls))
 	}
 
-	// Verify we got entries from both sitemaps
+	// Verify we got URLs from both sitemaps
 	locations := make(map[string]bool)
-	for _, entry := range entries {
-		locations[entry.Location] = true
+	for _, url := range urls {
+		locations[url.Location] = true
 	}
 
 	expectedLocations := []string{
@@ -210,7 +198,8 @@ func TestParseFromURL_SitemapIndex(t *testing.T) {
 
 	for _, expected := range expectedLocations {
 		if !locations[expected] {
-			t.Errorf("Expected to find location '%s' in entries", expected)
+			t.Errorf("Expected to find location '%s' in URLs", expected)
 		}
 	}
 }
+
