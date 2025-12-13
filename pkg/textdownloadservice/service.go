@@ -7,14 +7,14 @@ import (
 	"blog-search/pkg/db"
 	"blog-search/pkg/filter"
 	"blog-search/pkg/manager"
-	"blog-search/pkg/sitemap"
+	"blog-search/pkg/parser"
 )
 
-// Service handles downloading and processing articles from sitemaps
+// Service handles downloading and processing articles from sitemaps and RSS feeds
 type Service struct {
-	dbClient      *db.Client
-	manager       *manager.Manager
-	sitemapParser *sitemap.Parser
+	dbClient *db.Client
+	manager  *manager.Manager
+	parsers  []parser.Parser
 }
 
 // Config holds configuration for the service
@@ -27,31 +27,55 @@ type Config struct {
 // NewService creates a new TextDownloadService
 func NewService(config Config) *Service {
 	mgr := manager.NewManager(config.WorkerCount, config.DBClient)
-	parser := sitemap.NewParser()
+
+	// Initialize parsers in order: sitemap, then RSS
+	parsers := []parser.Parser{
+		parser.NewSitemapParser(),
+		parser.NewRSSParser(),
+	}
 
 	return &Service{
-		dbClient:      config.DBClient,
-		manager:       mgr,
-		sitemapParser: parser,
+		dbClient: config.DBClient,
+		manager:  mgr,
+		parsers:  parsers,
 	}
 }
 
-// DownloadFromSitemap downloads articles from the given sitemap URL
-func (s *Service) DownloadFromSitemap(ctx context.Context, sitemapURL string, maxEntries int) error {
-	// Parse sitemap
-	entries, err := s.sitemapParser.ParseFromURL(sitemapURL)
-	if err != nil {
-		return fmt.Errorf("failed to parse sitemap: %w", err)
+// DownloadFromSitemap downloads articles from the given URL (tries sitemap, then RSS)
+func (s *Service) DownloadFromSitemap(ctx context.Context, feedURL string, maxEntries int) error {
+	var urls []string
+	var err error
+
+	// Try each parser until one succeeds
+	for i, p := range s.parsers {
+		parsedURLs, parseErr := p.ParseFromURL(feedURL)
+		if parseErr != nil {
+			// Try next parser if this one fails
+			if i < len(s.parsers)-1 {
+				continue
+			}
+			// Last parser failed, return error
+			return fmt.Errorf("all parsers failed, last error: %w", parseErr)
+		}
+
+		if len(parsedURLs) == 0 {
+			// Parser succeeded but no URLs found, try next parser
+			if i < len(s.parsers)-1 {
+				continue
+			}
+			return fmt.Errorf("no URLs found in feed")
+		}
+
+		// Parser succeeded, extract URLs
+		urls = make([]string, 0, len(parsedURLs))
+		for _, url := range parsedURLs {
+			urls = append(urls, url.Location)
+		}
+		break
 	}
 
-	if len(entries) == 0 {
-		return fmt.Errorf("no entries found in sitemap")
-	}
-
-	// Extract URLs from entries
-	urls := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		urls = append(urls, entry.Location)
+	if len(urls) == 0 {
+		return fmt.Errorf("failed to parse feed from any parser")
 	}
 
 	// Get already-fetched URLs from database

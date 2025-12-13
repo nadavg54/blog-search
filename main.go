@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// Get sitemap URL from command line or use default
-	sitemapURL := "https://www.datadoghq.com/en/sitemap.xml"
+	sitemapURL := "https://netflixtechblog.com/feed"
 
 	if len(os.Args) > 1 {
 		sitemapURL = os.Args[1]
@@ -30,7 +30,7 @@ func main() {
 	service := textdownloadservice.NewService(textdownloadservice.Config{
 		DBClient:    dbClient,
 		WorkerCount: 100,
-		MaxEntries:  1000,
+		MaxEntries:  10000,
 	})
 
 	// Download articles from sitemap using the service
