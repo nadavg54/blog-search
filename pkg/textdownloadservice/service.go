@@ -28,8 +28,9 @@ type Config struct {
 func NewService(config Config) *Service {
 	mgr := manager.NewManager(config.WorkerCount, config.DBClient)
 
-	// Initialize parsers in order: sitemap, then RSS
+	// Initialize parsers in order: file, sitemap, then RSS
 	parsers := []parser.Parser{
+		parser.NewFileParser(),
 		parser.NewSitemapParser(),
 		parser.NewRSSParser(),
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"blog-search/pkg/db"
@@ -61,7 +62,30 @@ func (w *Worker) ProcessURL(ctx context.Context, url string) error {
 
 // fetchHTML fetches HTML content from a URL
 func fetchHTML(url string) (string, error) {
-	resp, err := http.Get(url)
+	// http.Client follows redirects by default, so we don't need to do anything special
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Follow up to 10 redirects
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			return nil
+		},
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers to mimic a real browser and avoid 406 errors
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	// Don't set Accept-Encoding - let Go handle compression automatically
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch URL: %w", err)
 	}
@@ -76,5 +100,12 @@ func fetchHTML(url string) (string, error) {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return string(body), nil
+	bodyStr := string(body)
+
+	// Check if we got an error page instead of actual HTML
+	if strings.Contains(bodyStr, "Not Acceptable") || strings.TrimSpace(bodyStr) == "" {
+		return "", fmt.Errorf("server returned error or empty response (status: %d)", resp.StatusCode)
+	}
+
+	return bodyStr, nil
 }
