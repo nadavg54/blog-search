@@ -1,4 +1,4 @@
-package parser
+package urls
 
 import (
 	"net/http"
@@ -62,7 +62,7 @@ func TestRSSParser_ParseFromURL(t *testing.T) {
 	defer server.Close()
 
 	parser := NewRSSParser()
-	urls, err := parser.ParseFromURL(server.URL)
+	urls, err := parser.Fetch(server.URL)
 	if err != nil {
 		t.Fatalf("Failed to parse RSS feed: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestRSSParser_ParseFromURL_AtomFeed(t *testing.T) {
 	defer server.Close()
 
 	parser := NewRSSParser()
-	urls, err := parser.ParseFromURL(server.URL)
+	urls, err := parser.Fetch(server.URL)
 	if err != nil {
 		t.Fatalf("Failed to parse Atom feed: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestRSSParser_ParseFromURL_EmptyFeed(t *testing.T) {
 	defer server.Close()
 
 	parser := NewRSSParser()
-	_, err := parser.ParseFromURL(server.URL)
+	_, err := parser.Fetch(server.URL)
 	if err == nil {
 		t.Error("Expected error for empty feed, got nil")
 	}
@@ -145,7 +145,7 @@ func TestRSSParser_ParseFromURL_EmptyFeed(t *testing.T) {
 
 func TestRSSParser_ParseFromURL_InvalidURL(t *testing.T) {
 	parser := NewRSSParser()
-	_, err := parser.ParseFromURL("http://invalid-url-that-does-not-exist-12345.com/feed")
+	_, err := parser.Fetch("http://invalid-url-that-does-not-exist-12345.com/feed")
 	if err == nil {
 		t.Error("Expected error for invalid URL, got nil")
 	}
@@ -186,7 +186,7 @@ func TestRSSParser_ParseFromURL_DatadogFormat(t *testing.T) {
 	defer server.Close()
 
 	parser := NewRSSParser()
-	urls, err := parser.ParseFromURL(server.URL)
+	urls, err := parser.Fetch(server.URL)
 	if err != nil {
 		t.Fatalf("Failed to parse Datadog RSS feed: %v", err)
 	}

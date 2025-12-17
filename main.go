@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// Get sitemap URL from command line or use default
-	sitemapURL := "https://developers.googleblog.com/sitemap.xml"
+	sitemapURL := "https://blog.cloudflare.com/sitemap-posts.xml"
 
 	if len(os.Args) > 1 {
 		sitemapURL = os.Args[1]
@@ -35,7 +35,7 @@ func main() {
 
 	// Download articles from sitemap using the service
 	log.Printf("Processing articles from sitemap: %s", sitemapURL)
-	if err := service.DownloadFromSitemap(ctx, sitemapURL, 10000); err != nil {
+	if err := service.DownloadText(ctx, sitemapURL, 10000); err != nil {
 		log.Fatalf("Failed to download articles: %v", err)
 	}
 

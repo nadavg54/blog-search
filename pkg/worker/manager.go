@@ -1,4 +1,4 @@
-package manager
+package worker
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"blog-search/pkg/db"
-	"blog-search/pkg/worker"
 )
 
 // Manager manages workers and distributes URLs to them
@@ -53,7 +52,7 @@ func (m *Manager) ProcessURLs(ctx context.Context, urls []string) error {
 		go func(workerID int) {
 			defer wg.Done()
 
-			w := worker.NewWorker(m.dbClient)
+			w := NewWorker(m.dbClient)
 
 			// Process jobs from channel - each worker tracks its own counts
 			for url := range jobChan {

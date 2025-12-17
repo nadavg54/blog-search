@@ -1,4 +1,4 @@
-package parser
+package urls
 
 import (
 	"encoding/xml"
@@ -20,8 +20,8 @@ func NewSitemapParser() *SitemapParser {
 	}
 }
 
-// ParseFromURL fetches and parses a sitemap from the given URL
-func (p *SitemapParser) ParseFromURL(url string) ([]URL, error) {
+// Fetch fetches and parses a sitemap from the given URL
+func (p *SitemapParser) Fetch(url string) ([]URL, error) {
 	resp, err := p.client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sitemap: %w", err)
@@ -56,7 +56,7 @@ func (p *SitemapParser) ParseFromURL(url string) ([]URL, error) {
 		// Parse all sitemaps in the index and combine their entries
 		var allURLs []URL
 		for _, sitemapURL := range sitemapURLs {
-			urls, err := p.ParseFromURL(sitemapURL)
+			urls, err := p.Fetch(sitemapURL)
 			if err != nil {
 				// Log error but continue with other sitemaps
 				// TODO: Consider adding a logger or error collection mechanism
@@ -145,4 +145,3 @@ type sitemapRef struct {
 	Location string `xml:"loc"`
 	LastMod  string `xml:"lastmod,omitempty"`
 }
-

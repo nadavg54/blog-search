@@ -26,7 +26,7 @@ func TestIntegration_ServiceDownload_WithFiltering(t *testing.T) {
 	service := createTestService(dbClient)
 	u5URL := htmlServer.URL + "/u5"
 
-	err := service.DownloadFromSitemap(ctx, sitemapServer.URL, 1000)
+	err := service.DownloadText(ctx, sitemapServer.URL, 1000)
 	if err != nil {
 		t.Fatalf("Service failed to download: %v", err)
 	}

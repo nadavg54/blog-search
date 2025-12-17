@@ -1,4 +1,4 @@
-package parser
+package urls
 
 import (
 	"fmt"
@@ -18,8 +18,8 @@ func NewRSSParser() *RSSParser {
 	}
 }
 
-// ParseFromURL fetches and parses an RSS/Atom feed from the given URL
-func (p *RSSParser) ParseFromURL(feedURL string) ([]URL, error) {
+// Fetch fetches and parses an RSS/Atom feed from the given URL
+func (p *RSSParser) Fetch(feedURL string) ([]URL, error) {
 	feed, err := p.feedParser.ParseURL(feedURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse RSS feed: %w", err)

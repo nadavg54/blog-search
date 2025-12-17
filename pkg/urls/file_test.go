@@ -1,4 +1,4 @@
-package parser
+package urls
 
 import (
 	"os"
@@ -27,7 +27,7 @@ https://example.com/article4
 	file.Close()
 
 	parser := NewFileParser()
-	urls, err := parser.ParseFromURL(file.Name())
+	urls, err := parser.Fetch(file.Name())
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestFileParser_ParseFromURL_EmptyFile(t *testing.T) {
 	file.Close()
 
 	parser := NewFileParser()
-	_, err = parser.ParseFromURL(file.Name())
+	_, err = parser.Fetch(file.Name())
 	if err == nil {
 		t.Error("Expected error for empty file, got nil")
 	}
@@ -71,7 +71,7 @@ func TestFileParser_ParseFromURL_EmptyFile(t *testing.T) {
 
 func TestFileParser_ParseFromURL_NonexistentFile(t *testing.T) {
 	parser := NewFileParser()
-	_, err := parser.ParseFromURL("/nonexistent/file/path.txt")
+	_, err := parser.Fetch("/nonexistent/file/path.txt")
 	if err == nil {
 		t.Error("Expected error for nonexistent file, got nil")
 	}
@@ -96,7 +96,7 @@ https://example.com/article2
 	file.Close()
 
 	parser := NewFileParser()
-	urls, err := parser.ParseFromURL(file.Name())
+	urls, err := parser.Fetch(file.Name())
 	if err != nil {
 		t.Fatalf("Failed to parse file: %v", err)
 	}
@@ -106,6 +106,3 @@ https://example.com/article2
 		t.Fatalf("Expected 2 URLs (comments should be skipped), got %d", len(urls))
 	}
 }
-
-
-

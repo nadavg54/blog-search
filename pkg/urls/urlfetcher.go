@@ -1,4 +1,4 @@
-package parser
+package urls
 
 // URL represents a URL entry from a parser (sitemap or RSS)
 type URL struct {
@@ -7,7 +7,7 @@ type URL struct {
 	// Add more fields as needed (LastMod, PublishDate, etc.)
 }
 
-// Parser defines the interface for URL parsers (sitemap, RSS, etc.)
-type Parser interface {
-	ParseFromURL(url string) ([]URL, error)
+// URLsFetcher defines the interface for URL parsers (sitemap, RSS, etc.)
+type URLsFetcher interface {
+	Fetch(baseUrl string) ([]URL, error)
 }

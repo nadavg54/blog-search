@@ -5,16 +5,15 @@ import (
 	"fmt"
 
 	"blog-search/pkg/db"
-	"blog-search/pkg/filter"
-	"blog-search/pkg/manager"
-	"blog-search/pkg/parser"
+	"blog-search/pkg/urls"
+	"blog-search/pkg/worker"
 )
 
 // Service handles downloading and processing articles from sitemaps and RSS feeds
 type Service struct {
-	dbClient *db.Client
-	manager  *manager.Manager
-	parsers  []parser.Parser
+	dbClient    *db.Client
+	manager     *worker.Manager
+	urlFetchers []urls.URLsFetcher
 }
 
 // Config holds configuration for the service
@@ -26,72 +25,71 @@ type Config struct {
 
 // NewService creates a new TextDownloadService
 func NewService(config Config) *Service {
-	mgr := manager.NewManager(config.WorkerCount, config.DBClient)
+	mgr := worker.NewManager(config.WorkerCount, config.DBClient)
 
 	// Initialize parsers in order: file, sitemap, then RSS
-	parsers := []parser.Parser{
-		parser.NewFileParser(),
-		parser.NewSitemapParser(),
-		parser.NewRSSParser(),
+	parsers := []urls.URLsFetcher{
+		urls.NewFileParser(),
+		urls.NewSitemapParser(),
+		urls.NewRSSParser(),
 	}
 
 	return &Service{
-		dbClient: config.DBClient,
-		manager:  mgr,
-		parsers:  parsers,
+		dbClient:    config.DBClient,
+		manager:     mgr,
+		urlFetchers: parsers,
 	}
 }
 
-// DownloadFromSitemap downloads articles from the given URL (tries sitemap, then RSS)
-func (s *Service) DownloadFromSitemap(ctx context.Context, feedURL string, maxEntries int) error {
-	var urls []string
+// DownloadText downloads articles from the given URL (tries sitemap, then RSS)
+func (s *Service) DownloadText(ctx context.Context, feedURL string, maxEntries int) error {
+	var result []string
 	var err error
 
-	// Try each parser until one succeeds
-	for i, p := range s.parsers {
-		parsedURLs, parseErr := p.ParseFromURL(feedURL)
-		if parseErr != nil {
-			// Try next parser if this one fails
-			if i < len(s.parsers)-1 {
+	for i, fethcer := range s.urlFetchers {
+		potentialUrls, fetchErr := fethcer.Fetch(feedURL)
+		if fetchErr != nil {
+
+			if i < len(s.urlFetchers)-1 {
 				continue
 			}
-			// Last parser failed, return error
-			return fmt.Errorf("all parsers failed, last error: %w", parseErr)
+			// Last fetcher failed, return error
+			return fmt.Errorf("all parsers failed, last error: %w", fetchErr)
 		}
 
-		if len(parsedURLs) == 0 {
-			// Parser succeeded but no URLs found, try next parser
-			if i < len(s.parsers)-1 {
+		if len(potentialUrls) == 0 {
+			// Fetcher succeeded but no URLs found, try next parser
+			if i < len(s.urlFetchers)-1 {
 				continue
 			}
 			return fmt.Errorf("no URLs found in feed")
 		}
 
-		// Parser succeeded, extract URLs
-		urls = make([]string, 0, len(parsedURLs))
-		for _, url := range parsedURLs {
-			urls = append(urls, url.Location)
+	
+		result = make([]string, 0, len(potentialUrls))
+		for _, url := range potentialUrls {
+			result = append(result, url.Location)
 		}
 		break
 	}
 
-	if len(urls) == 0 {
+	if len(result) == 0 {
 		return fmt.Errorf("failed to parse feed from any parser")
 	}
 
 	// Get already-fetched URLs from database
-	fetchedURLs, err := s.dbClient.GetAllURLs(ctx)
+	existingUrls, err := s.dbClient.GetAllURLs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get fetched URLs: %w", err)
 	}
 
 	// Apply filters
-	filters := []filter.Filter{
-		filter.NewBaseURLFilter(),
-		filter.NewAlreadyFetchedFilter(fetchedURLs),
+	filters := []urls.UrlFilter{
+		urls.NewBaseURLFilter(),
+		urls.NewAlreadyFetchedFilter(existingUrls),
 	}
 
-	filteredURLs, err := filter.FilterURLs(ctx, urls, filters...)
+	filteredURLs, err := filterUrls(ctx, result, filters...)
 	if err != nil {
 		return fmt.Errorf("failed to filter URLs: %w", err)
 	}
@@ -112,4 +110,28 @@ func (s *Service) DownloadFromSitemap(ctx context.Context, feedURL string, maxEn
 	}
 
 	return nil
+}
+
+// filterUrls applies all filters to a list of URLs
+func filterUrls(ctx context.Context, urls []string, filters ...urls.UrlFilter) ([]string, error) {
+	filtered := make([]string, 0, len(urls))
+
+	for _, urlStr := range urls {
+		keep := true
+		for _, f := range filters {
+			shouldKeep, err := f.ShouldKeep(ctx, urlStr)
+			if err != nil {
+				return nil, fmt.Errorf("filter error for URL %s: %w", urlStr, err)
+			}
+			if !shouldKeep {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			filtered = append(filtered, urlStr)
+		}
+	}
+
+	return filtered, nil
 }

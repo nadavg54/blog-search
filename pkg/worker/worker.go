@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"blog-search/pkg/content"
 	"blog-search/pkg/db"
 	"blog-search/pkg/domain"
-	"blog-search/pkg/extractor"
 )
 
 // Worker processes articles from URLs
@@ -34,12 +34,12 @@ func (w *Worker) ProcessURL(ctx context.Context, url string) error {
 	}
 
 	// Extract text and title
-	text, err := extractor.ExtractText(htmlContent)
+	text, err := content.ExtractText(htmlContent)
 	if err != nil {
 		return fmt.Errorf("failed to extract text: %w", err)
 	}
 
-	title, err := extractor.ExtractTitle(htmlContent)
+	title, err := content.ExtractTitle(htmlContent)
 	if err != nil {
 		return fmt.Errorf("failed to extract title: %w", err)
 	}

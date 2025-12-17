@@ -1,4 +1,4 @@
-package parser
+package urls
 
 import (
 	"bufio"
@@ -15,8 +15,8 @@ func NewFileParser() *FileParser {
 	return &FileParser{}
 }
 
-// ParseFromURL reads URLs from a file (file path is passed as the "url" parameter)
-func (p *FileParser) ParseFromURL(filePath string) ([]URL, error) {
+// Fetch reads URLs from a file (file path is passed as the "url" parameter)
+func (p *FileParser) Fetch(filePath string) ([]URL, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)

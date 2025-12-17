@@ -1,39 +1,14 @@
-package filter
+package urls
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 )
 
-// Filter defines the interface for URL filtering
-type Filter interface {
+// UrlFilter defines the interface for URL filtering
+type UrlFilter interface {
 	ShouldKeep(ctx context.Context, url string) (bool, error)
-}
-
-// FilterURLs applies all filters to a list of URLs
-func FilterURLs(ctx context.Context, urls []string, filters ...Filter) ([]string, error) {
-	filtered := make([]string, 0, len(urls))
-
-	for _, urlStr := range urls {
-		keep := true
-		for _, f := range filters {
-			shouldKeep, err := f.ShouldKeep(ctx, urlStr)
-			if err != nil {
-				return nil, fmt.Errorf("filter error for URL %s: %w", urlStr, err)
-			}
-			if !shouldKeep {
-				keep = false
-				break
-			}
-		}
-		if keep {
-			filtered = append(filtered, urlStr)
-		}
-	}
-
-	return filtered, nil
 }
 
 // BaseURLFilter filters out base/root URLs

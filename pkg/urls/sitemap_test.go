@@ -1,4 +1,4 @@
-package parser
+package urls
 
 import (
 	"net/http"
@@ -173,7 +173,7 @@ func TestSitemapParser_ParseFromURL_SitemapIndex(t *testing.T) {
 	serverURL = server.URL
 
 	parser := NewSitemapParser()
-	urls, err := parser.ParseFromURL(server.URL + "/sitemap-index.xml")
+	urls, err := parser.Fetch(server.URL + "/sitemap-index.xml")
 	if err != nil {
 		t.Fatalf("Failed to parse sitemap index from URL: %v", err)
 	}
@@ -202,6 +202,3 @@ func TestSitemapParser_ParseFromURL_SitemapIndex(t *testing.T) {
 		}
 	}
 }
-
-
-
