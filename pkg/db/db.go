@@ -68,6 +68,71 @@ func (c *Client) SaveArticle(ctx context.Context, article *domain.Article) error
 	return err
 }
 
+func (c *Client) podcastTranscriptCollection() (*mongo.Collection, error) {
+	if c.database == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	return c.database.Collection("podcast_transcript"), nil
+}
+
+// SavePodcastTranscript saves a podcast transcript to the dedicated podcast_transcript collection.
+// Uses the episode URL as a unique identifier and performs an upsert.
+func (c *Client) SavePodcastTranscript(ctx context.Context, transcript *domain.PodcastTranscript) error {
+	col, err := c.podcastTranscriptCollection()
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{"url": transcript.URL}
+	update := bson.M{"$set": transcript}
+	opts := options.Update().SetUpsert(true)
+
+	_, err = col.UpdateOne(ctx, filter, update, opts)
+	return err
+}
+
+// GetExistingPodcastTranscriptURLs returns a set of URLs that already exist in the
+// podcast_transcript collection for the provided list of candidate URLs.
+func (c *Client) GetExistingPodcastTranscriptURLs(ctx context.Context, urls []string) (map[string]bool, error) {
+	col, err := c.podcastTranscriptCollection()
+	if err != nil {
+		return nil, err
+	}
+
+	existing := make(map[string]bool)
+	if len(urls) == 0 {
+		return existing, nil
+	}
+
+	cursor, err := col.Find(
+		ctx,
+		bson.M{"url": bson.M{"$in": urls}},
+		options.Find().SetProjection(bson.M{"url": 1, "_id": 0}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query existing podcast transcript URLs: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var result struct {
+			URL string `bson:"url"`
+		}
+		if err := cursor.Decode(&result); err != nil {
+			continue
+		}
+		if result.URL != "" {
+			existing[result.URL] = true
+		}
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+
+	return existing, nil
+}
+
 // GetAllURLs fetches all URLs from the database and returns them as a map (set)
 func (c *Client) GetAllURLs(ctx context.Context) (map[string]bool, error) {
 	if c.collection == nil {
