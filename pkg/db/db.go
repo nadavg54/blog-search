@@ -100,3 +100,33 @@ func (c *Client) GetAllURLs(ctx context.Context) (map[string]bool, error) {
 
 	return urlSet, nil
 }
+
+// GetAllArticles fetches all articles from the configured collection.
+//
+// NOTE: This reads everything into memory. If this becomes large, we can switch
+// to a streaming cursor API + batching.
+func (c *Client) GetAllArticles(ctx context.Context) ([]domain.Article, error) {
+	if c.collection == nil {
+		return nil, fmt.Errorf("collection not initialized")
+	}
+
+	cursor, err := c.collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query articles: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var out []domain.Article
+	for cursor.Next(ctx) {
+		var a domain.Article
+		if err := cursor.Decode(&a); err != nil {
+			// Skip invalid documents; we can tighten this later if needed.
+			continue
+		}
+		out = append(out, a)
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+	return out, nil
+}

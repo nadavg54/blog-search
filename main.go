@@ -6,10 +6,22 @@ import (
 	"os"
 
 	"blog-search/pkg/db"
+	"blog-search/pkg/replication"
 	"blog-search/pkg/textdownloadservice"
 )
 
 func main() {
+	// Subcommand: replicate (one-shot Mongo -> Postgres)
+	//
+	// Example:
+	//   MONGO_URI="mongodb://admin:password@localhost:27017" \
+	//   POSTGRES_DSN="postgres://user:pass@localhost:5432/blogsearch?sslmode=disable" \
+	//   go run . replicate
+	if len(os.Args) > 1 && os.Args[1] == "replicate" {
+		runReplication()
+		return
+	}
+
 	// Get sitemap URL from command line or use default
 	sitemapURL := "https://blog.cloudflare.com/sitemap-posts.xml"
 
@@ -40,4 +52,46 @@ func main() {
 	}
 
 	log.Println("All done!")
+}
+
+func runReplication() {
+	ctx := context.Background()
+
+	// Keep config style similar to existing Mongo usage: explicit connection strings.
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://admin:password@localhost:27017"
+	}
+
+	postgresDSN := os.Getenv("POSTGRES_DSN")
+
+	mongo := db.NewClient(mongoURI, "blogsearch", "articles")
+	if err := mongo.Connect(ctx); err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+	defer func() {
+		_ = mongo.Close(ctx)
+	}()
+
+	pg := db.NewPostgresClient(db.PostgresConfig{DSN: postgresDSN})
+	if err := pg.Connect(ctx); err != nil {
+		log.Fatalf("Failed to connect to Postgres: %v", err)
+	}
+	defer func() {
+		_ = pg.Close()
+	}()
+
+	rep, err := replication.NewReplicator(replication.Config{
+		Mongo:    mongo,
+		Postgres: pg,
+	})
+	if err != nil {
+		log.Fatalf("Failed to create replicator: %v", err)
+	}
+
+	if err := rep.ReplicateArticlesMongoToPostgres(ctx); err != nil {
+		log.Fatalf("Replication failed: %v", err)
+	}
+
+	log.Println("Replication done!")
 }
