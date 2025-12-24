@@ -56,6 +56,15 @@ func (c *HTTPClient) Get(url string) (*http.Response, error) {
 	return c.Do(req)
 }
 
+// Head is a convenience method for HEAD requests
+func (c *HTTPClient) Head(url string) (*http.Response, error) {
+	req, err := http.NewRequest("HEAD", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.Do(req)
+}
+
 // setHeaders sets the appropriate headers based on client type
 func (c *HTTPClient) setHeaders(req *http.Request) {
 	switch c.clientType {

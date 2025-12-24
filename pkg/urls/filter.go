@@ -50,3 +50,20 @@ func (f *AlreadyFetchedFilter) ShouldKeep(ctx context.Context, urlStr string) (b
 	exists := f.fetchedURLs[urlStr]
 	return !exists, nil
 }
+
+// ContainsPathFilter filters URLs to only keep those that contain a specific path segment
+type ContainsPathFilter struct {
+	pathSegment string // The path segment to check for (e.g., "/blog")
+}
+
+// NewContainsPathFilter creates a new path filter that keeps URLs containing the specified path segment
+func NewContainsPathFilter(pathSegment string) *ContainsPathFilter {
+	return &ContainsPathFilter{
+		pathSegment: pathSegment,
+	}
+}
+
+// ShouldKeep returns true if URL contains the specified path segment
+func (f *ContainsPathFilter) ShouldKeep(ctx context.Context, urlStr string) (bool, error) {
+	return strings.Contains(urlStr, f.pathSegment), nil
+}
