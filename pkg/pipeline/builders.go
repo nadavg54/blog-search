@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"blog-search/pkg/content"
 	"blog-search/pkg/db"
 	"blog-search/pkg/urls"
 )
@@ -88,6 +89,45 @@ func PaginationPipelineBuilder(dbClient *db.Client, baseURL, pagePattern string,
 	consumer := ContentConsumer{
 		WorkerCount:      contentWorkers,
 		ContentProcessor: NewHTTPContentProcessor(),
+		ContentSaver:     NewDBContentSaver(dbClient),
+	}
+
+	return NewPipeline([]PipelineStep{step1, step2}, consumer)
+}
+
+// DataEngineeringPodcastPipelineBuilder builds a pipeline specifically for dataengineeringpodcast.com
+// It uses the DataEngineeringPodcastExtractor which extracts transcript text instead of general content
+// Pipeline: [Page Range Generator] → [HTML Page Fetcher] → [Content Consumer with Custom Extractor]
+// baseURL: the base URL (e.g., "https://www.dataengineeringpodcast.com")
+// pagePattern: the pattern for page URLs with %d placeholder (e.g., "/page/%d")
+func DataEngineeringPodcastPipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, filters ...urls.UrlFilter) *Pipeline {
+	// Step 1: Generate page URLs (uses Generator, not Fetcher)
+	step1 := PipelineStep{
+		Name:        "Page Range Generator",
+		WorkerCount: pageGenWorkers,
+		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, extractor),
+		Fetcher:     nil, // First step uses Generator
+	}
+
+	// Step 2: Extract article URLs from each page (uses Fetcher with filters)
+	var fetcher URLFetcher
+	if len(filters) > 0 {
+		fetcher = NewHTMLPageFetcherWithFilters(extractor, filters)
+	} else {
+		fetcher = NewHTMLPageFetcher(extractor)
+	}
+
+	step2 := PipelineStep{
+		Name:        "HTML Page Fetcher",
+		WorkerCount: htmlFetcherWorkers,
+		Generator:   nil, // Subsequent steps use Fetcher
+		Fetcher:     fetcher,
+	}
+
+	// Use custom extractor for dataengineeringpodcast that extracts transcript
+	consumer := ContentConsumer{
+		WorkerCount:      contentWorkers,
+		ContentProcessor: NewHTTPContentProcessorWithExtractor(content.NewDataEngineeringPodcastExtractor()),
 		ContentSaver:     NewDBContentSaver(dbClient),
 	}
 

@@ -5,14 +5,20 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestExtractContentFromSERadioArticle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test that makes real HTTP requests")
+	}
 	// Test fetching and extracting content from a specific se-radio.net article
 	articleURL := "https://se-radio.net/2025/11/se-radio-696-flavia-saldanha-on-data-engineering-for-ai/"
 
-	// Fetch HTML
-	client := &http.Client{}
+	// Fetch HTML with timeout to prevent hanging
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	resp, err := client.Get(articleURL)
 	if err != nil {
 		t.Fatalf("Failed to fetch article: %v", err)
@@ -74,10 +80,15 @@ func max(a, b int) int {
 
 // Test using direct HTTP fetch and content extraction
 func TestExtractContentUsingDirectFetch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test that makes real HTTP requests")
+	}
 	articleURL := "https://se-radio.net/2025/11/se-radio-696-flavia-saldanha-on-data-engineering-for-ai/"
 
-	// Fetch HTML directly
-	client := &http.Client{}
+	// Fetch HTML directly with timeout to prevent hanging
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	resp, err := client.Get(articleURL)
 	if err != nil {
 		t.Fatalf("Failed to fetch article: %v", err)

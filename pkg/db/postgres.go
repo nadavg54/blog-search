@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -45,7 +46,11 @@ func (c *PostgresClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("postgres DSN is required")
 	}
 
-	db, err := sql.Open("pgx", c.cfg.DSN)
+	// Disable prepared statement cache and use simple protocol to avoid conflicts in parallel execution
+	dsn := c.addConnectionParam(c.cfg.DSN, "statement_cache_capacity", "0")
+	dsn = c.addConnectionParam(dsn, "default_query_exec_mode", "simple_protocol")
+	
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return fmt.Errorf("open postgres: %w", err)
 	}
@@ -84,4 +89,18 @@ func (c *PostgresClient) Close() error {
 // DB exposes the underlying handle for query/exec operations.
 func (c *PostgresClient) DB() *sql.DB {
 	return c.db
+}
+
+// addConnectionParam adds a query parameter to the connection string if not already present.
+func (c *PostgresClient) addConnectionParam(connStr, key, value string) string {
+	if strings.Contains(connStr, key+"=") {
+		return connStr // Parameter already exists
+	}
+	
+	separator := "?"
+	if strings.Contains(connStr, "?") {
+		separator = "&"
+	}
+	
+	return connStr + separator + key + "=" + value
 }

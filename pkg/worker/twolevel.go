@@ -26,6 +26,7 @@ type TwoLevelManager struct {
 	pagesPerBatch     int
 	baseURLPattern    string
 	extractor         urls.URLExtractor
+	maxPages          int // Maximum number of pages to process (0 = unlimited)
 }
 
 // Config holds configuration for TwoLevelManager
@@ -36,6 +37,7 @@ type Config struct {
 	PagesPerBatch     int
 	BaseURLPattern    string
 	Extractor         urls.URLExtractor
+	MaxPages          int // Maximum number of pages to process (0 = unlimited, useful for testing)
 }
 
 // NewTwoLevelManager creates a new two-level worker manager
@@ -47,6 +49,7 @@ func NewTwoLevelManager(config Config) *TwoLevelManager {
 		pagesPerBatch:     config.PagesPerBatch,
 		baseURLPattern:    config.BaseURLPattern,
 		extractor:         config.Extractor,
+		maxPages:          config.MaxPages,
 	}
 }
 
@@ -83,11 +86,13 @@ func (m *TwoLevelManager) ProcessPaginatedPages(ctx context.Context) error {
 
 // generatePageRanges generates page ranges and sends them to the channel
 // Continues until a page returns no URLs (indicating end of pagination)
+// or until MaxPages is reached (if set)
 func (m *TwoLevelManager) generatePageRanges(ctx context.Context, pageRangeChan chan<- PageRange) {
 	defer close(pageRangeChan)
 
 	currentPage := 1
 	htmlFetcher := urls.NewHTMLFetcher(m.extractor)
+	pagesProcessed := 0
 
 	for {
 		// Check if context is cancelled
@@ -95,6 +100,12 @@ func (m *TwoLevelManager) generatePageRanges(ctx context.Context, pageRangeChan 
 		case <-ctx.Done():
 			return
 		default:
+		}
+
+		// Check if we've reached the max pages limit
+		if m.maxPages > 0 && pagesProcessed >= m.maxPages {
+			log.Printf("Reached max pages limit (%d), stopping pagination", m.maxPages)
+			return
 		}
 
 		// Check if the first page of this batch has URLs
@@ -123,6 +134,7 @@ func (m *TwoLevelManager) generatePageRanges(ctx context.Context, pageRangeChan 
 
 		// Move to next batch
 		currentPage += m.pagesPerBatch
+		pagesProcessed += m.pagesPerBatch
 	}
 }
 

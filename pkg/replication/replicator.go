@@ -2,9 +2,11 @@ package replication
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
 	"fmt"
 	"log"
+	"sync"
 
 	"blog-search/pkg/db"
 	"blog-search/pkg/domain"
@@ -13,7 +15,7 @@ import (
 // Config wires the replication dependencies.
 type Config struct {
 	Mongo    *db.Client
-	Postgres *db.PostgresClient
+	Postgres db.DBProvider
 
 	// Mongo collection name is currently baked into db.NewClient(..., collectionName).
 	// We'll keep this out of config for now to match existing patterns.
@@ -24,7 +26,7 @@ type Config struct {
 // This is intentionally a one-shot, "copy everything" flow for now.
 type Replicator struct {
 	mongo *db.Client
-	pg    *db.PostgresClient
+	pg    db.DBProvider
 }
 
 func NewReplicator(cfg Config) (*Replicator, error) {
@@ -66,25 +68,83 @@ func (r *Replicator) ReplicateArticlesMongoToPostgres(ctx context.Context) error
 	return nil
 }
 
-// processBatches processes all articles in batches and returns total processed and inserted counts.
+// processBatches processes all articles in batches in parallel and returns total processed and inserted counts.
 func (r *Replicator) processBatches(ctx context.Context, articles []domain.Article) (int, int, error) {
 	const processBatchSize = 100
-	totalProcessed := 0
-	totalInserted := 0
+	const numWorkers = 5
 
+	// Create batch jobs
+	type batchJob struct {
+		batch []domain.Article
+		start int
+		end   int
+	}
+
+	type batchResult struct {
+		processed int
+		inserted  int
+		err       error
+	}
+
+	// Calculate number of batches
+	numBatches := (len(articles) + processBatchSize - 1) / processBatchSize
+	jobs := make(chan batchJob, numBatches)
+	results := make(chan batchResult, numBatches)
+
+	// Create batches and send to jobs channel
 	for start := 0; start < len(articles); start += processBatchSize {
 		end := r.calculateBatchEnd(start, processBatchSize, len(articles))
 		batch := articles[start:end]
+		jobs <- batchJob{batch: batch, start: start, end: end}
+	}
+	close(jobs)
 
-		inserted, err := r.processBatch(ctx, batch, start, end)
-		if err != nil {
-			return totalProcessed, totalInserted, err
+	// Start worker goroutines
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				inserted, err := r.processBatch(ctx, job.batch, job.start, job.end)
+				results <- batchResult{
+					processed: len(job.batch),
+					inserted:  inserted,
+					err:       err,
+				}
+			}
+		}()
+	}
+
+	// Close results channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results and fail fast on error
+	var mu sync.Mutex
+	totalProcessed := 0
+	totalInserted := 0
+
+	for result := range results {
+		if result.err != nil {
+			return totalProcessed, totalInserted, result.err
 		}
 
-		totalProcessed += len(batch)
-		totalInserted += inserted
-		r.logProgress(totalProcessed, len(articles), totalInserted, end >= len(articles))
+		mu.Lock()
+		totalProcessed += result.processed
+		totalInserted += result.inserted
+		shouldLog := totalProcessed%1000 == 0 || totalProcessed == len(articles)
+		mu.Unlock()
+
+		if shouldLog {
+			r.logProgress(totalProcessed, len(articles), totalInserted, totalProcessed == len(articles))
+		}
 	}
+
+	// Final progress log
+	r.logProgress(totalProcessed, len(articles), totalInserted, true)
 
 	return totalProcessed, totalInserted, nil
 }
@@ -184,8 +244,19 @@ func (r *Replicator) extractURLsFromBatch(batch []domain.Article) []interface{} 
 }
 
 // buildURLInQuery builds a SQL query with IN clause and returns the query string and arguments.
+// Uses a unique identifier to prevent prepared statement cache conflicts in parallel execution.
 func (r *Replicator) buildURLInQuery(urls []interface{}) (string, []interface{}) {
-	query := `SELECT url FROM article WHERE url IN (`
+	// Use a unique query pattern to avoid prepared statement cache conflicts
+	// Each batch gets a unique query based on the number of URLs and a hash of the first URL
+	// This prevents pgx from trying to cache the same prepared statement across goroutines
+	var hashSuffix string
+	if len(urls) > 0 {
+		if urlStr, ok := urls[0].(string); ok {
+			hash := md5.Sum([]byte(urlStr))
+			hashSuffix = fmt.Sprintf("%x", hash[:4]) // Use first 4 bytes of hash
+		}
+	}
+	query := fmt.Sprintf(`/* q_%d_%s */ SELECT url FROM article WHERE url IN (`, len(urls), hashSuffix)
 	args := make([]interface{}, len(urls))
 	for i, url := range urls {
 		if i > 0 {

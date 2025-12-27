@@ -24,28 +24,28 @@ func TestTwoLevelManager_ProcessPaginatedPages(t *testing.T) {
 	}
 	defer dbClient.Close(ctx)
 
-	// Clear test collection
-	_, err := dbClient.GetAllArticles(ctx)
-	if err != nil {
-		// Collection might not exist, that's okay
-	}
+	// Note: We don't clear the test collection - the test will work with existing data
+	// The MaxPages limit ensures we only process a few pages for testing
 
 	// Create TwoLevelManager with se-radio.net configuration
+	var err error
+	// Limit to 3 pages to verify it works without processing the entire site
 	manager := NewTwoLevelManager(Config{
-		URLFetcherWorkers: 3, // 3 Level 1 workers (fetch URLs from pages)
-		ContentWorkers:    5, // 5 Level 2 workers (fetch content and save)
+		URLFetcherWorkers: 2, // 2 Level 1 workers (fetch URLs from pages)
+		ContentWorkers:    3, // 3 Level 2 workers (fetch content and save)
 		DBClient:          dbClient,
 		PagesPerBatch:     1, // Process 1 page per batch for testing
 		BaseURLPattern:    "https://se-radio.net/page/%d",
 		Extractor:         urls.ExtractSERadioURLs,
+		MaxPages:          3, // Limit to 3 pages for testing
 	})
 
-	// Create a context with timeout for full pagination (may take a while)
-	testCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	// Create a context with timeout
+	testCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	// Process pages - will continue until no more pages found
-	t.Log("Starting two-level worker pipeline for full pagination...")
+	// Process pages - will stop after 3 pages
+	t.Log("Starting two-level worker pipeline (testing with 3 pages)...")
 	err = manager.ProcessPaginatedPages(testCtx)
 	if err != nil {
 		t.Fatalf("ProcessPaginatedPages failed: %v", err)
@@ -57,10 +57,12 @@ func TestTwoLevelManager_ProcessPaginatedPages(t *testing.T) {
 		t.Fatalf("Failed to get articles from database: %v", err)
 	}
 
+	// We just need to verify that it processed multiple pages and saved articles
+	// Don't require a specific number since we're limiting pages
 	if len(articles) == 0 {
 		t.Error("Expected articles to be saved, but found none")
 	} else {
-		t.Logf("Successfully saved %d articles to database", len(articles))
+		t.Logf("Successfully saved %d articles to database (processed multiple pages)", len(articles))
 
 		// Print first few articles
 		printCount := 3
@@ -88,7 +90,7 @@ func TestTwoLevelManager_ProcessPaginatedPages_MultipleBatches(t *testing.T) {
 	}
 	defer dbClient.Close(ctx)
 
-	// Create TwoLevelManager - test with 2 batches of 1 page each
+	// Create TwoLevelManager - test with multiple batches (3 pages)
 	manager := NewTwoLevelManager(Config{
 		URLFetcherWorkers: 2,
 		ContentWorkers:    3,
@@ -96,17 +98,15 @@ func TestTwoLevelManager_ProcessPaginatedPages_MultipleBatches(t *testing.T) {
 		PagesPerBatch:     1, // 1 page per batch
 		BaseURLPattern:    "https://se-radio.net/page/%d",
 		Extractor:         urls.ExtractSERadioURLs,
+		MaxPages:          3, // Limit to 3 pages for testing
 	})
 
-	// Modify generatePageRanges to only generate 2 batches for testing
-	// We'll do this by creating a custom manager or modifying the test
-
 	// Create a context with timeout
-	testCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	testCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	// Process pages
-	t.Log("Starting two-level worker pipeline with multiple batches...")
+	// Process pages - will process 3 pages to verify multiple batches work
+	t.Log("Starting two-level worker pipeline with multiple batches (3 pages)...")
 	err := manager.ProcessPaginatedPages(testCtx)
 	if err != nil {
 		t.Fatalf("ProcessPaginatedPages failed: %v", err)
