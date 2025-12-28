@@ -9,8 +9,8 @@
             "program": "${workspaceFolder}",
             "args": ["replicate"],
             "env": {
-                "MONGO_URI": "mongodb://admin:password@localhost:27017",
-                "SUPABASE_CONNECTION_STRING": "postgresql://postgres.wmoiagolzzyhzkxthhvy:70kVv20rYzRlGd5r@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require"
+                "MONGO_URI": "${env:MONGO_URI}",
+                "SUPABASE_CONNECTION_STRING": "${env:SUPABASE_CONNECTION_STRING}"
             },
             "console": "integratedTerminal"
         }

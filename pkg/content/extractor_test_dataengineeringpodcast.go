@@ -36,11 +36,11 @@ func TestExtractTextFromDataEngineeringPodcast(t *testing.T) {
 	fmt.Printf("\n=== Data Engineering Podcast Extraction Test ===\n")
 	fmt.Printf("Title: %s\n", title)
 	fmt.Printf("Text Content Length: %d characters\n", len(text))
-	
+
 	if len(text) > 0 {
 		previewLen := min(1000, len(text))
 		fmt.Printf("\nFirst %d characters of extracted text:\n%s\n", previewLen, text[:previewLen])
-		
+
 		// Check if transcript content is present
 		// Look for some known transcript phrases
 		knownPhrases := []string{
@@ -48,7 +48,7 @@ func TestExtractTextFromDataEngineeringPodcast(t *testing.T) {
 			"Tobias Macey",
 			"Nick Schrock",
 		}
-		
+
 		fmt.Printf("\n=== Checking for transcript content ===\n")
 		foundCount := 0
 		for _, phrase := range knownPhrases {
@@ -59,7 +59,7 @@ func TestExtractTextFromDataEngineeringPodcast(t *testing.T) {
 				fmt.Printf("✗ Missing phrase: '%s'\n", phrase)
 			}
 		}
-		
+
 		if foundCount == 0 {
 			fmt.Printf("\n⚠️  No transcript phrases found - current extractor may not be extracting transcript content\n")
 		}
@@ -94,17 +94,17 @@ func TestExtractTranscriptFromDataEngineeringPodcast(t *testing.T) {
 	// Print results
 	fmt.Printf("\n=== Transcript Extraction Test ===\n")
 	fmt.Printf("Transcript Length: %d characters\n", len(transcript))
-	
+
 	previewLen := min(500, len(transcript))
 	fmt.Printf("\nFirst %d characters of transcript:\n%s\n", previewLen, transcript[:previewLen])
-	
+
 	// Check for known transcript phrases that should be in the transcript
 	knownPhrases := []string{
 		"Hello, and welcome to the Data Engineering podcast",
 		"Data teams everywhere face the same problem",
 		"Nick Schrock",
 	}
-	
+
 	fmt.Printf("\n=== Verifying transcript content ===\n")
 	foundCount := 0
 	for _, phrase := range knownPhrases {
@@ -115,15 +115,14 @@ func TestExtractTranscriptFromDataEngineeringPodcast(t *testing.T) {
 			fmt.Printf("✗ Missing phrase: '%s'\n", phrase)
 		}
 	}
-	
+
 	// Verify at least some key phrases are found
 	if foundCount == 0 {
 		t.Error("No expected transcript phrases found - extraction may have failed")
 	}
-	
+
 	// Verify transcript has reasonable length (should be substantial for a podcast)
 	if len(transcript) < 1000 {
 		t.Errorf("Transcript seems too short (%d chars), expected at least 1000 characters", len(transcript))
 	}
 }
-
