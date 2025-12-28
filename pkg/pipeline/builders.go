@@ -3,6 +3,7 @@ package pipeline
 import (
 	"blog-search/pkg/content"
 	"blog-search/pkg/db"
+	"blog-search/pkg/httpclient"
 	"blog-search/pkg/urls"
 )
 
@@ -132,6 +133,44 @@ func DataEngineeringPodcastPipelineBuilder(dbClient *db.Client, baseURL, pagePat
 	}
 
 	return NewPipeline([]PipelineStep{step1, step2}, consumer)
+}
+
+// HTMLFilePipelineBuilder builds a pipeline for extracting URLs from a local HTML file
+// Pipeline: HTML File Path → [HTML File Fetcher] → [Content Consumer]
+// Pass the HTML file path as the baseURL parameter when calling Run()
+// extractor: function to extract URLs from the HTML content
+// clientType: optional HTTP client type (defaults to CloudflareClient if not provided)
+func HTMLFilePipelineBuilder(dbClient *db.Client, urlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, filters ...urls.UrlFilter) *Pipeline {
+	return HTMLFilePipelineBuilderWithClient(dbClient, urlFetcherWorkers, contentWorkers, extractor, httpclient.CloudflareClient, filters...)
+}
+
+// HTMLFilePipelineBuilderWithClient builds a pipeline for extracting URLs from a local HTML file with a specific client type
+// Pipeline: HTML File Path → [HTML File Fetcher] → [Content Consumer]
+// Pass the HTML file path as the baseURL parameter when calling Run()
+// extractor: function to extract URLs from the HTML content
+// clientType: HTTP client type to use for fetching content (BrowserClient or CloudflareClient)
+func HTMLFilePipelineBuilderWithClient(dbClient *db.Client, urlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, clientType httpclient.ClientType, filters ...urls.UrlFilter) *Pipeline {
+	var fetcher URLFetcher
+	if len(filters) > 0 {
+		fetcher = NewHTMLPageFetcherWithFilters(extractor, filters)
+	} else {
+		fetcher = NewHTMLPageFetcher(extractor)
+	}
+
+	step := PipelineStep{
+		Name:        "HTML File Fetcher",
+		WorkerCount: urlFetcherWorkers,
+		Generator:   nil, // Uses Fetcher with file path (passed as baseURL to Run())
+		Fetcher:     fetcher,
+	}
+
+	consumer := ContentConsumer{
+		WorkerCount:      contentWorkers,
+		ContentProcessor: NewHTTPContentProcessorWithClient(clientType),
+		ContentSaver:     NewDBContentSaver(dbClient),
+	}
+
+	return NewPipeline([]PipelineStep{step}, consumer)
 }
 
 // MultiLevelPipelineBuilder builds a custom pipeline with multiple steps

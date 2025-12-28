@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"blog-search/pkg/db"
+	"blog-search/pkg/httpclient"
 	"blog-search/pkg/pipeline"
 	"blog-search/pkg/replication"
 	"blog-search/pkg/sites"
@@ -49,6 +50,9 @@ func main() {
 	//
 	// Example with pagination:
 	//   go run . pipeline paginate https://se-radio.net /page/%d
+	//
+	// Example with HTML file:
+	//   go run . pipeline htmlfile html-page-examples/se-radio-page.html se-radio
 	if len(os.Args) > 1 && os.Args[1] == "pipeline" {
 		runPipeline()
 		return
@@ -136,8 +140,10 @@ func runPipeline() {
 		p, baseURL = buildRSSPipeline(dbClient, nonFlagArgs, filters)
 	case "paginate":
 		p, baseURL = buildPaginationPipeline(dbClient, nonFlagArgs, filters)
+	case "htmlfile":
+		p, baseURL = buildHTMLFilePipeline(dbClient, nonFlagArgs, filters)
 	default:
-		log.Fatalf("Unknown pipeline type: %s. Use 'sitemap', 'rss', or 'paginate'", pipelineType)
+		log.Fatalf("Unknown pipeline type: %s. Use 'sitemap', 'rss', 'paginate', or 'htmlfile'", pipelineType)
 	}
 
 	runPipelineAndReport(ctx, p, baseURL, dbClient)
@@ -160,7 +166,7 @@ func initializeDatabase(ctx context.Context) *db.Client {
 // parsePipelineFlags parses command-line flags and separates flag args from non-flag args
 func parsePipelineFlags() (*string, []string) {
 	if len(os.Args) < 3 {
-		log.Fatalf("Usage: go run . pipeline [sitemap|rss|paginate] [URL/pattern] [additional args...] [-url-filter=<path>]")
+		log.Fatalf("Usage: go run . pipeline [sitemap|rss|paginate|htmlfile] [URL/pattern/file] [additional args...] [-url-filter=<path>]")
 	}
 
 	fs := flag.NewFlagSet("pipeline", flag.ExitOnError)
@@ -254,6 +260,59 @@ func buildPaginationPipeline(dbClient *db.Client, args []string, filters []urls.
 	logPaginationConfig(baseURLArg, pagePattern, args, extractor, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, filters)
 
 	return p, baseURLArg
+}
+
+// buildHTMLFilePipeline builds an HTML file pipeline from command-line arguments
+func buildHTMLFilePipeline(dbClient *db.Client, args []string, filters []urls.UrlFilter) (*pipeline.Pipeline, string) {
+	if len(args) < 3 {
+		log.Fatalf("Usage: go run . pipeline htmlfile <html-file-path> <extractor-type> [url-fetcher-workers] [content-workers] [client-type] [-url-filter=<path>]\n" +
+			"  extractor-type: se-radio, data-engineering-podcast, generic\n" +
+			"  client-type: browser (for sites that block curl) or cloudflare (default)")
+	}
+
+	htmlFilePath := args[1]
+	extractorType := args[2]
+	urlFetcherWorkers := parseWorkerCount(args, 3, 1)
+	contentWorkers := parseWorkerCount(args, 4, 5)
+	clientType := parseClientType(args, 5, httpclient.CloudflareClient)
+
+	extractor := getExtractorByType(extractorType)
+	if extractor == nil {
+		log.Fatalf("Unknown extractor type: %s. Available: se-radio, data-engineering-podcast, generic", extractorType)
+	}
+
+	p := pipeline.HTMLFilePipelineBuilderWithClient(dbClient, urlFetcherWorkers, contentWorkers, extractor, clientType, filters...)
+	logHTMLFileConfig(htmlFilePath, extractorType, urlFetcherWorkers, contentWorkers, clientType, filters)
+
+	return p, htmlFilePath
+}
+
+// parseClientType parses a client type from args at the given index, with a default value
+func parseClientType(args []string, index int, defaultValue httpclient.ClientType) httpclient.ClientType {
+	if len(args) > index {
+		clientTypeStr := strings.ToLower(args[index])
+		switch clientTypeStr {
+		case "browser":
+			return httpclient.BrowserClient
+		case "cloudflare":
+			return httpclient.CloudflareClient
+		default:
+			log.Printf("Unknown client type '%s', using default (%s)", clientTypeStr, defaultValue)
+		}
+	}
+	return defaultValue
+}
+
+// logHTMLFileConfig logs the HTML file pipeline configuration
+func logHTMLFileConfig(htmlFilePath, extractorType string, urlFetcherWorkers, contentWorkers int, clientType httpclient.ClientType, filters []urls.UrlFilter) {
+	log.Printf("Running HTML File pipeline for file: %s", htmlFilePath)
+	log.Printf("  Extractor: %s", extractorType)
+	log.Printf("  URL Fetcher Workers: %d", urlFetcherWorkers)
+	log.Printf("  Content Workers: %d", contentWorkers)
+	log.Printf("  HTTP Client Type: %s", clientType)
+	if len(filters) > 0 {
+		log.Printf("  Applied %d URL filter(s)", len(filters))
+	}
 }
 
 // parseWorkerCount parses a worker count from args at the given index, with a default value

@@ -45,6 +45,14 @@ func NewHTTPContentProcessorWithExtractor(extractor content.Extractor) *HTTPCont
 	}
 }
 
+// NewHTTPContentProcessorWithExtractorAndClient creates a new HTTP content processor with both extractor and client type
+func NewHTTPContentProcessorWithExtractorAndClient(extractor content.Extractor, clientType httpclient.ClientType) *HTTPContentProcessor {
+	return &HTTPContentProcessor{
+		client:    httpclient.NewClient(clientType),
+		extractor: extractor,
+	}
+}
+
 // SetExtractor sets a custom extractor for the processor
 func (p *HTTPContentProcessor) SetExtractor(extractor content.Extractor) {
 	p.extractor = extractor
@@ -122,6 +130,12 @@ func (p *HTTPContentProcessor) fetchHTML(url string) (string, error) {
 	}
 
 	return bodyStr, nil
+}
+
+// SetClientType sets the HTTP client type for the processor
+// This allows changing the client type after creation
+func (p *HTTPContentProcessor) SetClientType(clientType httpclient.ClientType) {
+	p.client = httpclient.NewClient(clientType)
 }
 
 // DBContentSaver implements ContentSaver by saving articles to a MongoDB database

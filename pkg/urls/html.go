@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"blog-search/pkg/httpclient"
@@ -55,8 +56,20 @@ func (f *HTMLFetcher) Fetch(url string) ([]URL, error) {
 	return urls, nil
 }
 
-// fetchHTML fetches the HTML content from the given URL
-func (f *HTMLFetcher) fetchHTML(url string) (string, error) {
+// fetchHTML fetches the HTML content from the given URL or reads from a local file path
+// If the input starts with "http://" or "https://", it treats it as a URL and fetches via HTTP
+// Otherwise, it treats it as a file path and reads from the local filesystem
+func (f *HTMLFetcher) fetchHTML(urlOrPath string) (string, error) {
+	// Check if it's a URL (starts with http:// or https://)
+	if strings.HasPrefix(urlOrPath, "http://") || strings.HasPrefix(urlOrPath, "https://") {
+		return f.fetchHTMLFromURL(urlOrPath)
+	}
+	// Otherwise, treat it as a file path
+	return f.readHTMLFromFile(urlOrPath)
+}
+
+// fetchHTMLFromURL fetches the HTML content from the given URL
+func (f *HTMLFetcher) fetchHTMLFromURL(url string) (string, error) {
 	resp, err := f.client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch URL: %w", err)
@@ -70,6 +83,22 @@ func (f *HTMLFetcher) fetchHTML(url string) (string, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return string(body), nil
+}
+
+// readHTMLFromFile reads HTML content from a local file path
+func (f *HTMLFetcher) readHTMLFromFile(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	body, err := io.ReadAll(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
 	return string(body), nil

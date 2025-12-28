@@ -13,6 +13,26 @@
                 "SUPABASE_CONNECTION_STRING": "${env:SUPABASE_CONNECTION_STRING}"
             },
             "console": "integratedTerminal"
+        },
+        {
+            "name": "pipeline htmlfile browser client (doordash)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "pipeline",
+                "htmlfile",
+                "html-page-examples/doordash.html",
+                "generic",
+                "1",
+                "5",
+                "browser"
+            ],
+            "env": {
+                "MONGO_URI": "${env:MONGO_URI}"
+            },
+            "console": "integratedTerminal"
         }
     ]
 }
