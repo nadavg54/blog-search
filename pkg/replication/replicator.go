@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"blog-search/pkg/db"
@@ -16,29 +17,34 @@ import (
 type Config struct {
 	Mongo    *db.Client
 	Postgres db.DBProvider
+	// ArticleMongo is the MongoDB client for the article collection (used for Mongo-to-Mongo replication)
+	ArticleMongo *db.Client
 
 	// Mongo collection name is currently baked into db.NewClient(..., collectionName).
 	// We'll keep this out of config for now to match existing patterns.
 }
 
-// Replicator replicates data from MongoDB to Postgres.
+// Replicator replicates data from MongoDB to Postgres or MongoDB.
 //
 // This is intentionally a one-shot, "copy everything" flow for now.
 type Replicator struct {
-	mongo *db.Client
-	pg    db.DBProvider
+	mongo        *db.Client
+	pg           db.DBProvider
+	articleMongo *db.Client
 }
 
 func NewReplicator(cfg Config) (*Replicator, error) {
 	if cfg.Mongo == nil {
 		return nil, fmt.Errorf("mongo client is required")
 	}
-	if cfg.Postgres == nil {
-		return nil, fmt.Errorf("postgres client is required")
+	// Postgres is required for Mongo->Postgres replication, ArticleMongo for Mongo->Mongo replication
+	if cfg.Postgres == nil && cfg.ArticleMongo == nil {
+		return nil, fmt.Errorf("either postgres client or article mongo client is required")
 	}
 	return &Replicator{
-		mongo: cfg.Mongo,
-		pg:    cfg.Postgres,
+		mongo:        cfg.Mongo,
+		pg:           cfg.Postgres,
+		articleMongo: cfg.ArticleMongo,
 	}, nil
 }
 
@@ -48,6 +54,9 @@ func NewReplicator(cfg Config) (*Replicator, error) {
 // Behavior: if a URL already exists in Postgres, we skip inserting it.
 // Processes articles in batches to avoid loading all URLs into memory at once.
 func (r *Replicator) ReplicateArticlesMongoToPostgres(ctx context.Context) error {
+	if r.pg == nil {
+		return fmt.Errorf("postgres client is required for MongoDB-to-Postgres replication")
+	}
 	if err := r.ensureArticleSchema(ctx); err != nil {
 		return err
 	}
@@ -66,6 +75,92 @@ func (r *Replicator) ReplicateArticlesMongoToPostgres(ctx context.Context) error
 
 	log.Printf("Replication complete: processed %d articles, inserted %d new articles", totalProcessed, totalInserted)
 	return nil
+}
+
+// ReplicatePodcastTranscriptsToArticles reads all PodcastTranscript documents from Mongo and inserts them
+// into the MongoDB `article` collection.
+//
+// Behavior: if a URL already exists, it will be updated (upsert).
+// The text field is populated with transcript if not empty, otherwise with page_content.
+// Processes articles in batches to avoid loading all into memory at once.
+func (r *Replicator) ReplicatePodcastTranscriptsToArticles(ctx context.Context) error {
+	if r.articleMongo == nil {
+		return fmt.Errorf("article mongo client is required for MongoDB-to-MongoDB replication")
+	}
+
+	transcripts, err := r.readAllPodcastTranscriptsFromMongo(ctx)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Loaded %d podcast transcripts from Mongo, converting to articles...", len(transcripts))
+
+	articles := r.convertPodcastTranscriptsToArticles(transcripts)
+	log.Printf("Converted to %d articles, processing in batches...", len(articles))
+
+	const batchSize = 100
+	totalProcessed := 0
+	totalInserted := 0
+
+	for start := 0; start < len(articles); start += batchSize {
+		end := start + batchSize
+		if end > len(articles) {
+			end = len(articles)
+		}
+
+		batch := articles[start:end]
+		log.Printf("Processing batch [%d:%d] (%d articles)...", start, end, len(batch))
+
+		inserted := 0
+		for _, article := range batch {
+			if article.URL == "" {
+				continue
+			}
+			if err := r.articleMongo.SaveArticle(ctx, &article); err != nil {
+				return fmt.Errorf("save article url=%q: %w", article.URL, err)
+			}
+			inserted++
+		}
+
+		totalProcessed += len(batch)
+		totalInserted += inserted
+
+		if totalProcessed%1000 == 0 || totalProcessed == len(articles) {
+			log.Printf("Progress: processed %d/%d articles, saved %d articles", totalProcessed, len(articles), totalInserted)
+		}
+	}
+
+	log.Printf("Replication complete: processed %d articles, saved %d articles", totalProcessed, totalInserted)
+	return nil
+}
+
+// readAllPodcastTranscriptsFromMongo reads all podcast transcripts from MongoDB.
+func (r *Replicator) readAllPodcastTranscriptsFromMongo(ctx context.Context) ([]domain.PodcastTranscript, error) {
+	transcripts, err := r.mongo.GetAllPodcastTranscripts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return transcripts, nil
+}
+
+// convertPodcastTranscriptsToArticles converts podcast transcripts to articles.
+// The text field is populated with transcript if not empty, otherwise with page_content.
+func (r *Replicator) convertPodcastTranscriptsToArticles(transcripts []domain.PodcastTranscript) []domain.Article {
+	articles := make([]domain.Article, 0, len(transcripts))
+	for _, pt := range transcripts {
+		text := pt.Transcript
+		if text == "" {
+			text = pt.PageContent
+		}
+
+		articles = append(articles, domain.Article{
+			URL:       pt.URL,
+			Title:     pt.Title,
+			Text:      text,
+			CrawledAt: pt.CrawledAt,
+		})
+	}
+	return articles
 }
 
 // processBatches processes all articles in batches in parallel and returns total processed and inserted counts.
@@ -355,10 +450,23 @@ ON CONFLICT (url) DO NOTHING`
 		if a.URL == "" {
 			continue
 		}
-		if _, err := stmt.ExecContext(ctx, a.URL, a.Title, a.Text, a.CrawledAt); err != nil {
-			return fmt.Errorf("insert article url=%q: %w", a.URL, err)
+		// Sanitize all string fields to remove NULL bytes which Postgres doesn't allow in UTF-8 strings
+		sanitizedURL := r.removeNullBytes(a.URL)
+		sanitizedTitle := r.removeNullBytes(a.Title)
+		sanitizedText := r.removeNullBytes(a.Text)
+		if _, err := stmt.ExecContext(ctx, sanitizedURL, sanitizedTitle, sanitizedText, a.CrawledAt); err != nil {
+			return fmt.Errorf("insert article url=%q: %w", sanitizedURL, err)
 		}
 	}
 
 	return nil
+}
+
+// removeNullBytes sanitizes a string for Postgres by removing NULL bytes and invalid UTF-8 sequences.
+// Postgres doesn't allow NULL bytes (0x00) or invalid UTF-8 byte sequences in text fields.
+func (r *Replicator) removeNullBytes(s string) string {
+	// First remove NULL bytes
+	s = strings.ReplaceAll(s, "\x00", "")
+	// Then convert any invalid UTF-8 sequences to valid UTF-8 (replaces invalid sequences with replacement char)
+	return strings.ToValidUTF8(s, "")
 }

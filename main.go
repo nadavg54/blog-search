@@ -119,61 +119,31 @@ func runReplication() {
 		_ = mongo.Close(ctx)
 	}()
 
-	// Support both Postgres and Supabase
+	// Support Postgres (including Supabase, which is just PostgreSQL)
 	var dbProvider db.DBProvider
 	supabaseConnStr := os.Getenv("SUPABASE_CONNECTION_STRING")
-	supabaseURL := os.Getenv("SUPABASE_URL")
-	supabaseKey := os.Getenv("SUPABASE_KEY")
-	supabasePassword := os.Getenv("SUPABASE_PASSWORD")
 	postgresDSN := os.Getenv("POSTGRES_DSN")
 
-	// Check if Supabase is configured
-	hasSupabaseConfig := supabaseConnStr != "" || (supabaseURL != "" && supabasePassword != "")
-	hasSupabaseURLKey := supabaseURL != "" && supabaseKey != ""
-
-	if hasSupabaseConfig || hasSupabaseURLKey {
-		// Use Supabase client (will work in REST API mode if only URL+key provided)
-		supabaseClient := db.NewSupabaseClient(db.SupabaseConfig{
-			ConnectionString: supabaseConnStr,
-			SupabaseURL:      supabaseURL,
-			SupabaseKey:      supabaseKey,
-			Password:         supabasePassword,
-		})
-		if err := supabaseClient.Connect(ctx); err != nil {
-			log.Fatalf("Failed to connect to Supabase: %v", err)
-		}
-		defer func() {
-			_ = supabaseClient.Close()
-		}()
-
-		// Check if we have direct DB access (required for replication)
-		if !supabaseClient.HasDirectDB() {
-			log.Fatalf("Direct database connection is required for replication.\n" +
-				"You provided Supabase URL and key, but replication needs direct SQL access.\n" +
-				"Please set SUPABASE_PASSWORD (your database password from Supabase dashboard) or SUPABASE_CONNECTION_STRING.\n" +
-				"Note: The API key is for REST API calls, not for direct Postgres connections.")
-		}
-
-		dbProvider = supabaseClient
-		log.Println("Using Supabase client")
-	} else if postgresDSN != "" {
-		// Use standard Postgres client
-		pg := db.NewPostgresClient(db.PostgresConfig{DSN: postgresDSN})
-		if err := pg.Connect(ctx); err != nil {
-			log.Fatalf("Failed to connect to Postgres: %v", err)
-		}
-		defer func() {
-			_ = pg.Close()
-		}()
-		dbProvider = pg
-		log.Println("Using Postgres client")
-	} else {
-		log.Fatalf("Database connection required for replication.\n" +
-			"Options:\n" +
-			"  1. SUPABASE_CONNECTION_STRING (full connection string)\n" +
-			"  2. SUPABASE_URL + SUPABASE_PASSWORD (we'll build the connection string)\n" +
-			"  3. POSTGRES_DSN (standard Postgres connection string)")
+	// Use SUPABASE_CONNECTION_STRING if provided, otherwise use POSTGRES_DSN
+	dsn := supabaseConnStr
+	if dsn == "" {
+		dsn = postgresDSN
 	}
+
+	if dsn == "" {
+		log.Fatalf("Database connection required for replication.\n" +
+			"Set either SUPABASE_CONNECTION_STRING or POSTGRES_DSN environment variable.")
+	}
+
+	pg := db.NewPostgresClient(db.PostgresConfig{DSN: dsn})
+	if err := pg.Connect(ctx); err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer func() {
+		_ = pg.Close()
+	}()
+	dbProvider = pg
+	log.Println("Connected to database")
 
 	rep, err := replication.NewReplicator(replication.Config{
 		Mongo:    mongo,

@@ -130,3 +130,34 @@ func (c *Client) GetAllArticles(ctx context.Context) ([]domain.Article, error) {
 	}
 	return out, nil
 }
+
+// GetAllPodcastTranscripts fetches all podcast transcripts from the podcast_transcript collection.
+//
+// NOTE: This reads from the podcast_transcript collection in the same database,
+// not the collection configured in the Client. This reads everything into memory.
+func (c *Client) GetAllPodcastTranscripts(ctx context.Context) ([]domain.PodcastTranscript, error) {
+	if c.database == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	collection := c.database.Collection("podcast_transcript")
+	cursor, err := collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to query podcast transcripts: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var out []domain.PodcastTranscript
+	for cursor.Next(ctx) {
+		var pt domain.PodcastTranscript
+		if err := cursor.Decode(&pt); err != nil {
+			// Skip invalid documents; we can tighten this later if needed.
+			continue
+		}
+		out = append(out, pt)
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+	return out, nil
+}
