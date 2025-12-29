@@ -33,6 +33,24 @@
                 "MONGO_URI": "${env:MONGO_URI}"
             },
             "console": "integratedTerminal"
+        },
+        {
+            "name": "pipeline category dropbox.tech",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}",
+            "args": [
+                "pipeline",
+                "category",
+                "https://dropbox.tech/",
+                "culture,security,mobile,infrastructure,application",
+                "generic"
+            ],
+            "env": {
+                "MONGO_URI": "${env:MONGO_URI}"
+            },
+            "console": "integratedTerminal"
         }
     ]
 }

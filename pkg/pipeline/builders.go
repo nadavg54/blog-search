@@ -173,6 +173,43 @@ func HTMLFilePipelineBuilderWithClient(dbClient *db.Client, urlFetcherWorkers, c
 	return NewPipeline([]PipelineStep{step}, consumer)
 }
 
+// CategoryPipelineBuilder builds a pipeline for category-based sites
+// Pipeline: [Category Generator] → [HTML Page Fetcher] → [Content Consumer]
+// baseURL: the base URL (e.g., "https://site.com")
+// categories: list of categories to append to base URL (e.g., ["category1", "category2"])
+func CategoryPipelineBuilder(dbClient *db.Client, baseURL string, categories []string, htmlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, filters ...urls.UrlFilter) *Pipeline {
+	// Step 1: Generate category URLs (uses Generator, not Fetcher)
+	step1 := PipelineStep{
+		Name:        "Category Generator",
+		WorkerCount: 1, // Generator runs once, worker count not used
+		Generator:   NewPageCategoryGenerator(baseURL, categories),
+		Fetcher:     nil, // First step uses Generator
+	}
+
+	// Step 2: Extract article URLs from each category page (uses Fetcher with filters)
+	var fetcher URLFetcher
+	if len(filters) > 0 {
+		fetcher = NewHTMLPageFetcherWithFilters(extractor, filters)
+	} else {
+		fetcher = NewHTMLPageFetcher(extractor)
+	}
+
+	step2 := PipelineStep{
+		Name:        "HTML Page Fetcher",
+		WorkerCount: htmlFetcherWorkers,
+		Generator:   nil, // Subsequent steps use Fetcher
+		Fetcher:     fetcher,
+	}
+
+	consumer := ContentConsumer{
+		WorkerCount:      contentWorkers,
+		ContentProcessor: NewHTTPContentProcessor(),
+		ContentSaver:     NewDBContentSaver(dbClient),
+	}
+
+	return NewPipeline([]PipelineStep{step1, step2}, consumer)
+}
+
 // MultiLevelPipelineBuilder builds a custom pipeline with multiple steps
 // Example: BaseURL → [Step 1] → [Step 2] → ... → [Content Consumer]
 func MultiLevelPipelineBuilder(steps []PipelineStep, consumer ContentConsumer) *Pipeline {

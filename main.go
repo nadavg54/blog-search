@@ -51,6 +51,9 @@ func main() {
 	// Example with pagination:
 	//   go run . pipeline paginate https://se-radio.net /page/%d
 	//
+	// Example with categories:
+	//   go run . pipeline category https://site.com category1,category2,category3
+	//
 	// Example with HTML file:
 	//   go run . pipeline htmlfile html-page-examples/se-radio-page.html se-radio
 	if len(os.Args) > 1 && os.Args[1] == "pipeline" {
@@ -140,10 +143,12 @@ func runPipeline() {
 		p, baseURL = buildRSSPipeline(dbClient, nonFlagArgs, filters)
 	case "paginate":
 		p, baseURL = buildPaginationPipeline(dbClient, nonFlagArgs, filters)
+	case "category":
+		p, baseURL = buildCategoryPipeline(dbClient, nonFlagArgs, filters)
 	case "htmlfile":
 		p, baseURL = buildHTMLFilePipeline(dbClient, nonFlagArgs, filters)
 	default:
-		log.Fatalf("Unknown pipeline type: %s. Use 'sitemap', 'rss', 'paginate', or 'htmlfile'", pipelineType)
+		log.Fatalf("Unknown pipeline type: %s. Use 'sitemap', 'rss', 'paginate', 'category', or 'htmlfile'", pipelineType)
 	}
 
 	runPipelineAndReport(ctx, p, baseURL, dbClient)
@@ -260,6 +265,60 @@ func buildPaginationPipeline(dbClient *db.Client, args []string, filters []urls.
 	logPaginationConfig(baseURLArg, pagePattern, args, extractor, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, filters)
 
 	return p, baseURLArg
+}
+
+// buildCategoryPipeline builds a category pipeline from command-line arguments
+func buildCategoryPipeline(dbClient *db.Client, args []string, filters []urls.UrlFilter) (*pipeline.Pipeline, string) {
+	if len(args) < 3 {
+		log.Fatalf("Usage: go run . pipeline category <base-url> <category1,category2,...> [extractor-type] [html-fetcher-workers] [content-workers] [-url-filter=<path>]")
+	}
+
+	baseURLArg := args[1]
+	categoriesStr := args[2]
+	extractor := determineExtractor(args, baseURLArg)
+	htmlFetcherWorkers := parseWorkerCount(args, 4, 3)
+	contentWorkers := parseWorkerCount(args, 5, 5)
+
+	// Parse comma-separated categories
+	categories := parseCategories(categoriesStr)
+
+	var p *pipeline.Pipeline
+	p = pipeline.CategoryPipelineBuilder(dbClient, baseURLArg, categories, htmlFetcherWorkers, contentWorkers, extractor, filters...)
+	logCategoryConfig(baseURLArg, categories, args, extractor, htmlFetcherWorkers, contentWorkers, filters)
+
+	return p, baseURLArg
+}
+
+// parseCategories parses comma-separated categories and trims whitespace
+func parseCategories(categoriesStr string) []string {
+	parts := strings.Split(categoriesStr, ",")
+	categories := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			categories = append(categories, trimmed)
+		}
+	}
+	return categories
+}
+
+// logCategoryConfig logs the category pipeline configuration
+func logCategoryConfig(baseURL string, categories []string, args []string, extractor urls.URLExtractor, htmlFetcherWorkers, contentWorkers int, filters []urls.UrlFilter) {
+	log.Printf("Running Category pipeline for %s with categories: %v", baseURL, categories)
+
+	extractorName := "se-radio (default)"
+	if len(args) >= 4 {
+		extractorName = args[3]
+	} else if strings.Contains(baseURL, "dataengineeringpodcast.com") {
+		extractorName = "data-engineering-podcast (auto-detected)"
+	}
+
+	log.Printf("  Extractor: %s", extractorName)
+	log.Printf("  HTML Fetcher Workers: %d", htmlFetcherWorkers)
+	log.Printf("  Content Workers: %d", contentWorkers)
+	if len(filters) > 0 {
+		log.Printf("  Applied %d URL filter(s)", len(filters))
+	}
 }
 
 // buildHTMLFilePipeline builds an HTML file pipeline from command-line arguments

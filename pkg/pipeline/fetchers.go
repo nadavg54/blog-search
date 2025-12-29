@@ -270,3 +270,49 @@ func (f *PageRangeGenerator) checkPageContent(pageURL string) (bool, error) {
 
 	return true, nil
 }
+
+// PageCategoryGenerator generates category URLs from a base URL and a list of categories
+// Used for sites where we need to generate URLs like "https://site.com/category1", "https://site.com/category2", etc.
+// Implements URLGenerator interface
+type PageCategoryGenerator struct {
+	baseURL    string   // Base URL (e.g., "https://site.com")
+	categories []string // List of categories to append to base URL
+}
+
+// NewPageCategoryGenerator creates a new page category generator
+// baseURL: the base URL (e.g., "https://site.com")
+// categories: list of categories to append to base URL (e.g., ["category1", "category2"])
+func NewPageCategoryGenerator(baseURL string, categories []string) *PageCategoryGenerator {
+	return &PageCategoryGenerator{
+		baseURL:    baseURL,
+		categories: categories,
+	}
+}
+
+// Generate generates category URLs by appending each category to the base URL
+// Returns all generated category URLs
+func (f *PageCategoryGenerator) Generate(ctx context.Context) ([]string, error) {
+	var categoryURLs []string
+
+	for _, category := range f.categories {
+		select {
+		case <-ctx.Done():
+			return categoryURLs, ctx.Err()
+		default:
+		}
+
+		categoryURL := f.buildCategoryURL(category)
+		categoryURLs = append(categoryURLs, categoryURL)
+	}
+
+	log.Printf("PageCategoryGenerator: Generated %d category URLs total", len(categoryURLs))
+	return categoryURLs, nil
+}
+
+// buildCategoryURL builds the URL for a given category
+func (f *PageCategoryGenerator) buildCategoryURL(category string) string {
+	// Ensure base URL doesn't end with / and category doesn't start with /
+	base := strings.TrimSuffix(f.baseURL, "/")
+	cat := strings.TrimPrefix(category, "/")
+	return base + "/" + cat
+}
