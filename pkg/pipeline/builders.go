@@ -210,6 +210,29 @@ func CategoryPipelineBuilder(dbClient *db.Client, baseURL string, categories []s
 	return NewPipeline([]PipelineStep{step1, step2}, consumer)
 }
 
+// DirectPagePipelineBuilder builds a pipeline that generates page URLs and processes them directly as articles
+// Pipeline: [Page Range Generator] → [Content Consumer]
+// This is useful when page URLs themselves are article URLs, or when you want to process paginated pages directly
+// baseURL: the base URL (e.g., "https://site.com")
+// pagePattern: the pattern for page URLs with %d placeholder (e.g., "/page/%d" or "/page-bla-blah/%d")
+func DirectPagePipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, contentWorkers int, extractor urls.URLExtractor) *Pipeline {
+	// Step 1: Generate page URLs (uses Generator, not Fetcher)
+	step1 := PipelineStep{
+		Name:        "Page Range Generator",
+		WorkerCount: pageGenWorkers,
+		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, extractor),
+		Fetcher:     nil, // First step uses Generator
+	}
+
+	consumer := ContentConsumer{
+		WorkerCount:      contentWorkers,
+		ContentProcessor: NewHTTPContentProcessor(),
+		ContentSaver:     NewDBContentSaver(dbClient),
+	}
+
+	return NewPipeline([]PipelineStep{step1}, consumer)
+}
+
 // MultiLevelPipelineBuilder builds a custom pipeline with multiple steps
 // Example: BaseURL → [Step 1] → [Step 2] → ... → [Content Consumer]
 func MultiLevelPipelineBuilder(steps []PipelineStep, consumer ContentConsumer) *Pipeline {

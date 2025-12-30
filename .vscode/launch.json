@@ -51,6 +51,58 @@
                 "MONGO_URI": "${env:MONGO_URI}"
             },
             "console": "integratedTerminal"
+        },
+        {
+            "name": "[REFACTORED] replicate from mongo to supabase",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/refactored",
+            "args": ["replicate"],
+            "env": {
+                "MONGO_URI": "${env:MONGO_URI}",
+                "SUPABASE_CONNECTION_STRING": "${env:SUPABASE_CONNECTION_STRING}"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "[REFACTORED] pipeline htmlfile browser client",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/refactored",
+            "args": [
+                "pipeline",
+                "htmlfile",
+                "-file=html-page-examples/appflyer-user-acquistion.html",
+                "-extractor=generic",
+                "-url-fetcher-workers=1",
+                "-content-workers=5",
+                "-client-type=browser"
+            ],
+            "env": {
+                "MONGO_URI": "${env:MONGO_URI}"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "[REFACTORED] pipeline",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/refactored",
+            "args": [
+                "pipeline",
+                "directpage",
+                "-url=https://changelog.com/podcast/",
+                "-pattern=%d",
+                "-extractor=generic",
+                "-url-filter=https://changelog.com/podcast/"
+            ],
+            "env": {
+                "MONGO_URI": "${env:MONGO_URI}"
+            },
+            "console": "integratedTerminal"
         }
     ]
 }
