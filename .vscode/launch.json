@@ -74,7 +74,7 @@
             "args": [
                 "pipeline",
                 "htmlfile",
-                "-file=html-page-examples/appflyer-user-acquistion.html",
+                "-file=html-page-examples/pintrest.html",
                 "-extractor=generic",
                 "-url-fetcher-workers=1",
                 "-content-workers=5",

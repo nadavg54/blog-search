@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"blog-search/pkg/httpclient"
@@ -89,7 +90,37 @@ func (f *HTMLFetcher) fetchHTMLFromURL(url string) (string, error) {
 }
 
 // readHTMLFromFile reads HTML content from a local file path
+// Resolves relative paths relative to the workspace root (where go.mod is located)
 func (f *HTMLFetcher) readHTMLFromFile(filePath string) (string, error) {
+	// If path is already absolute, use it as-is
+	if filepath.IsAbs(filePath) {
+		file, err := os.Open(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to open file: %w", err)
+		}
+		defer file.Close()
+
+		body, err := io.ReadAll(file)
+		if err != nil {
+			return "", fmt.Errorf("failed to read file: %w", err)
+		}
+		return string(body), nil
+	}
+
+	// For relative paths, find the workspace root (where go.mod is)
+	workspaceRoot, err := findWorkspaceRoot()
+	if err != nil {
+		// Fallback to current working directory if we can't find workspace root
+		absPath, absErr := filepath.Abs(filePath)
+		if absErr != nil {
+			return "", fmt.Errorf("failed to resolve file path: %w", absErr)
+		}
+		filePath = absPath
+	} else {
+		// Resolve relative to workspace root
+		filePath = filepath.Join(workspaceRoot, filePath)
+	}
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %w", err)
@@ -102,6 +133,30 @@ func (f *HTMLFetcher) readHTMLFromFile(filePath string) (string, error) {
 	}
 
 	return string(body), nil
+}
+
+// findWorkspaceRoot finds the workspace root by looking for go.mod file
+// Walks up the directory tree from the current working directory
+func findWorkspaceRoot() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	dir := wd
+	for {
+		goModPath := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root directory without finding go.mod
+			return "", fmt.Errorf("go.mod not found")
+		}
+		dir = parent
+	}
 }
 
 // extractURLsFromHTML extracts URLs from HTML using the configured extractor

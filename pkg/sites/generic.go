@@ -126,6 +126,44 @@ func getBaseURL(doc *goquery.Document) string {
 		}
 	}
 
+	// Strategy 4: Look for absolute URLs in the HTML and infer base URL
+	// Check href and data-href attributes for absolute URLs
+	// Collect all base URLs and return the most common one
+	baseURLMap := make(map[string]int)
+	doc.Find("a[href], [data-href]").Each(func(i int, s *goquery.Selection) {
+		var urlStr string
+		if href, exists := s.Attr("href"); exists && href != "" {
+			urlStr = href
+		} else if dataHref, exists := s.Attr("data-href"); exists && dataHref != "" {
+			urlStr = dataHref
+		}
+
+		if urlStr != "" {
+			if parsed, err := url.Parse(urlStr); err == nil && parsed.IsAbs() {
+				parsed.Path = ""
+				parsed.RawQuery = ""
+				parsed.Fragment = ""
+				base := parsed.String()
+				if base != "" {
+					baseURLMap[base]++
+				}
+			}
+		}
+	})
+
+	// Return the most common base URL
+	if len(baseURLMap) > 0 {
+		maxCount := 0
+		var mostCommonBase string
+		for base, count := range baseURLMap {
+			if count > maxCount {
+				maxCount = count
+				mostCommonBase = base
+			}
+		}
+		return mostCommonBase
+	}
+
 	return ""
 }
 
