@@ -238,7 +238,7 @@ func buildRSSPipeline(dbClient *db.Client, args Args, filters []urls.UrlFilter) 
 // ============================================================================
 
 func buildPaginationPipeline(dbClient *db.Client, args Args, filters []urls.UrlFilter) (*pipeline.Pipeline, string) {
-	usage := "Usage: go run ./cmd/refactored pipeline paginate -url=<base-url> -pattern=<page-pattern> [-extractor=<type>] [-pages-per-batch=<n>] [-page-gen-workers=<n>] [-url-fetcher-workers=<n>] [-content-workers=<n>] [-url-filter=<path>]"
+	usage := "Usage: go run ./cmd/refactored pipeline paginate -url=<base-url> -pattern=<page-pattern> [-extractor=<type>] [-pages-per-batch=<n>] [-page-gen-workers=<n>] [-url-fetcher-workers=<n>] [-content-workers=<n>] [-number-of-pages=<n>] [-url-filter=<path>]"
 
 	baseURL := args.RequireString("url", usage)
 	pagePattern := args.RequireString("pattern", usage)
@@ -247,18 +247,19 @@ func buildPaginationPipeline(dbClient *db.Client, args Args, filters []urls.UrlF
 	pageGenWorkers := args.GetInt("page-gen-workers", 1)
 	urlFetcherWorkers := args.GetInt("url-fetcher-workers", 3)
 	contentWorkers := args.GetInt("content-workers", 5)
+	numberOfPages := args.GetInt("number-of-pages", 0)
 
 	extractor := determineExtractor(extractorType, baseURL)
 
 	var p *pipeline.Pipeline
 	if strings.Contains(baseURL, "dataengineeringpodcast.com") {
-		p = pipeline.DataEngineeringPodcastPipelineBuilder(dbClient, baseURL, pagePattern, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers, extractor, filters...)
+		p = pipeline.DataEngineeringPodcastPipelineBuilder(dbClient, baseURL, pagePattern, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers, numberOfPages, extractor, filters...)
 		log.Printf("Using DataEngineeringPodcastPipelineBuilder (with transcript extraction)")
 	} else {
-		p = pipeline.PaginationPipelineBuilder(dbClient, baseURL, pagePattern, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers, extractor, filters...)
+		p = pipeline.PaginationPipelineBuilder(dbClient, baseURL, pagePattern, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers, numberOfPages, extractor, filters...)
 	}
 
-	logPaginationConfig(baseURL, pagePattern, extractorType, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers, filters)
+	logPaginationConfig(baseURL, pagePattern, extractorType, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers, numberOfPages, filters)
 
 	return p, baseURL
 }
@@ -316,7 +317,7 @@ func buildHTMLFilePipeline(dbClient *db.Client, args Args, filters []urls.UrlFil
 // ============================================================================
 
 func buildDirectPagePipeline(dbClient *db.Client, args Args) (*pipeline.Pipeline, string) {
-	usage := "Usage: go run ./cmd/refactored pipeline directpage -url=<base-url> -pattern=<page-pattern> [-extractor=<type>] [-pages-per-batch=<n>] [-page-gen-workers=<n>] [-content-workers=<n>]"
+	usage := "Usage: go run ./cmd/refactored pipeline directpage -url=<base-url> -pattern=<page-pattern> [-extractor=<type>] [-pages-per-batch=<n>] [-page-gen-workers=<n>] [-content-workers=<n>] [-number-of-pages=<n>]"
 
 	baseURL := args.RequireString("url", usage)
 	pagePattern := args.RequireString("pattern", usage)
@@ -324,11 +325,12 @@ func buildDirectPagePipeline(dbClient *db.Client, args Args) (*pipeline.Pipeline
 	pagesPerBatch := args.GetInt("pages-per-batch", 10)
 	pageGenWorkers := args.GetInt("page-gen-workers", 1)
 	contentWorkers := args.GetInt("content-workers", 5)
+	numberOfPages := args.GetInt("number-of-pages", 0)
 
 	extractor := determineExtractor(extractorType, baseURL)
 
-	p := pipeline.DirectPagePipelineBuilder(dbClient, baseURL, pagePattern, pagesPerBatch, pageGenWorkers, contentWorkers, extractor)
-	logDirectPageConfig(baseURL, pagePattern, extractorType, pagesPerBatch, pageGenWorkers, contentWorkers)
+	p := pipeline.DirectPagePipelineBuilder(dbClient, baseURL, pagePattern, pagesPerBatch, pageGenWorkers, contentWorkers, numberOfPages, extractor)
+	logDirectPageConfig(baseURL, pagePattern, extractorType, pagesPerBatch, pageGenWorkers, contentWorkers, numberOfPages)
 
 	return p, baseURL
 }

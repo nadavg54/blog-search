@@ -63,12 +63,13 @@ func SitemapPipelineBuilder(dbClient *db.Client, urlFetcherWorkers, contentWorke
 // Pipeline: [Page Range Generator] → [HTML Page Fetcher] → [Content Consumer]
 // baseURL: the base URL (e.g., "https://site.com")
 // pagePattern: the pattern for page URLs with %d placeholder (e.g., "/page/%d" or "/page-bla-blah/%d")
-func PaginationPipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, filters ...urls.UrlFilter) *Pipeline {
+// numberOfPages: number of pages to generate (0 = unlimited, check existence for each page)
+func PaginationPipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, numberOfPages int, extractor urls.URLExtractor, filters ...urls.UrlFilter) *Pipeline {
 	// Step 1: Generate page URLs (uses Generator, not Fetcher)
 	step1 := PipelineStep{
 		Name:        "Page Range Generator",
 		WorkerCount: pageGenWorkers,
-		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, extractor),
+		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, numberOfPages, extractor),
 		Fetcher:     nil, // First step uses Generator
 	}
 
@@ -101,12 +102,13 @@ func PaginationPipelineBuilder(dbClient *db.Client, baseURL, pagePattern string,
 // Pipeline: [Page Range Generator] → [HTML Page Fetcher] → [Content Consumer with Custom Extractor]
 // baseURL: the base URL (e.g., "https://www.dataengineeringpodcast.com")
 // pagePattern: the pattern for page URLs with %d placeholder (e.g., "/page/%d")
-func DataEngineeringPodcastPipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, filters ...urls.UrlFilter) *Pipeline {
+// numberOfPages: number of pages to generate (0 = unlimited, check existence for each page)
+func DataEngineeringPodcastPipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, numberOfPages int, extractor urls.URLExtractor, filters ...urls.UrlFilter) *Pipeline {
 	// Step 1: Generate page URLs (uses Generator, not Fetcher)
 	step1 := PipelineStep{
 		Name:        "Page Range Generator",
 		WorkerCount: pageGenWorkers,
-		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, extractor),
+		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, numberOfPages, extractor),
 		Fetcher:     nil, // First step uses Generator
 	}
 
@@ -215,12 +217,13 @@ func CategoryPipelineBuilder(dbClient *db.Client, baseURL string, categories []s
 // This is useful when page URLs themselves are article URLs, or when you want to process paginated pages directly
 // baseURL: the base URL (e.g., "https://site.com")
 // pagePattern: the pattern for page URLs with %d placeholder (e.g., "/page/%d" or "/page-bla-blah/%d")
-func DirectPagePipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, contentWorkers int, extractor urls.URLExtractor) *Pipeline {
+// numberOfPages: number of pages to generate (0 = unlimited, check existence for each page)
+func DirectPagePipelineBuilder(dbClient *db.Client, baseURL, pagePattern string, pagesPerBatch, pageGenWorkers, contentWorkers, numberOfPages int, extractor urls.URLExtractor) *Pipeline {
 	// Step 1: Generate page URLs (uses Generator, not Fetcher)
 	step1 := PipelineStep{
 		Name:        "Page Range Generator",
 		WorkerCount: pageGenWorkers,
-		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, extractor),
+		Generator:   NewPageRangeGenerator(baseURL, pagePattern, pagesPerBatch, numberOfPages, extractor),
 		Fetcher:     nil, // First step uses Generator
 	}
 

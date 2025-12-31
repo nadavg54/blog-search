@@ -172,7 +172,7 @@ func TestPageRangeGenerator_Generate_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	generator := NewPageRangeGenerator(server.URL, "/page/%d", 10, nil)
+	generator := NewPageRangeGenerator(server.URL, "/page/%d", 10, 0, nil)
 	ctx := context.Background()
 
 	result, err := generator.Generate(ctx)
@@ -202,7 +202,7 @@ func TestPageRangeGenerator_Generate_ContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	generator := NewPageRangeGenerator(server.URL, "/page/%d", 10, nil)
+	generator := NewPageRangeGenerator(server.URL, "/page/%d", 10, 0, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Cancel context immediately
@@ -231,7 +231,7 @@ func TestPageRangeGenerator_Generate_NoPages(t *testing.T) {
 	}))
 	defer server.Close()
 
-	generator := NewPageRangeGenerator(server.URL, "/page/%d", 10, nil)
+	generator := NewPageRangeGenerator(server.URL, "/page/%d", 10, 0, nil)
 	ctx := context.Background()
 
 	result, err := generator.Generate(ctx)

@@ -131,11 +131,13 @@ func NewHTMLPageFetcherWithFilters(extractor urls.URLExtractor, filters []urls.U
 // Used for paginated sites where we need to generate URLs like "https://site.com/page/1", "page/2", etc.
 // It generates page URLs until it finds a page that doesn't exist (404 or other error)
 // or contains content indicating no more pages (e.g., "0 episodes found")
+// If numberOfPages > 0, generates exactly that many pages without checking existence (except page 1 check)
 // Implements URLGenerator interface
 type PageRangeGenerator struct {
 	baseURL             string                 // Base URL (e.g., "https://site.com")
 	pagePattern         string                 // Page pattern with %d placeholder (e.g., "/page/%d" or "/page-bla-blah/%d")
 	pagesPerBatch       int                    // Not currently used, kept for backward compatibility
+	numberOfPages       int                    // Number of pages to generate (0 = unlimited, check existence)
 	httpClient          *httpclient.HTTPClient // Used to check if a page exists via HEAD request
 	emptyContentMarkers []string               // Strings that indicate no content (e.g., "0 episodes found")
 }
@@ -144,12 +146,14 @@ type PageRangeGenerator struct {
 // baseURL: the base URL (e.g., "https://site.com")
 // pagePattern: the pattern for page URLs with %d placeholder (e.g., "/page/%d" or "/page-bla-blah/%d")
 // pagesPerBatch: not currently used, kept for backward compatibility
+// numberOfPages: number of pages to generate (0 = unlimited, check existence for each page)
 // extractor: not currently used, kept for backward compatibility (HEAD requests don't need content extraction)
-func NewPageRangeGenerator(baseURL, pagePattern string, pagesPerBatch int, extractor urls.URLExtractor) *PageRangeGenerator {
+func NewPageRangeGenerator(baseURL, pagePattern string, pagesPerBatch, numberOfPages int, extractor urls.URLExtractor) *PageRangeGenerator {
 	return &PageRangeGenerator{
 		baseURL:             baseURL,
 		pagePattern:         pagePattern,
 		pagesPerBatch:       pagesPerBatch,
+		numberOfPages:       numberOfPages,
 		httpClient:          httpclient.NewClient(httpclient.CloudflareClient),
 		emptyContentMarkers: []string{"0 episodes found"}, // Default markers, can be extended
 	}
@@ -158,10 +162,34 @@ func NewPageRangeGenerator(baseURL, pagePattern string, pagesPerBatch int, extra
 // Generate generates page URLs from the configured pattern
 // Returns page URLs that should be processed by the next step
 // Stops when a page returns no URLs (indicating end of pagination)
+// Automatically detects if page 1 should be the base URL (if /page/1 returns 404 or "not found")
+// If numberOfPages > 0, generates exactly that many pages without checking existence (except page 1 check)
 func (f *PageRangeGenerator) Generate(ctx context.Context) ([]string, error) {
 	var allPageURLs []string
-	currentPage := 1
 
+	// Always check if page 1 with pattern exists or contains "not found"
+	// If not, use base URL for page 1 and start from page 2
+	page1URL := f.buildPageURL(1)
+	useBaseURLForPage1, err := f.shouldUseBaseURLForPage1(ctx, page1URL)
+	if err != nil {
+		log.Printf("PageRangeGenerator: Error checking page 1: %v - proceeding with pattern", err)
+		useBaseURLForPage1 = false
+	}
+
+	var currentPage int
+	if useBaseURLForPage1 {
+		log.Printf("PageRangeGenerator: Page 1 with pattern not found, using base URL for page 1")
+		allPageURLs = append(allPageURLs, f.baseURL)
+		currentPage = 2
+	} else {
+		currentPage = 1
+	}
+
+	if f.numberOfPages > 0 {
+		log.Printf("PageRangeGenerator: Generating exactly %d pages (existence checks bypassed)", f.numberOfPages)
+	}
+
+	// Single loop that handles both fixed page count and dynamic existence checking
 	for {
 		select {
 		case <-ctx.Done():
@@ -170,7 +198,7 @@ func (f *PageRangeGenerator) Generate(ctx context.Context) ([]string, error) {
 		}
 
 		pageURL := f.buildPageURL(currentPage)
-		shouldStop, err := f.shouldStopPagination(ctx, currentPage, pageURL)
+		shouldStop, err := f.shouldStopPagination(ctx, currentPage, pageURL, useBaseURLForPage1)
 		if err != nil || shouldStop {
 			break
 		}
@@ -188,8 +216,32 @@ func (f *PageRangeGenerator) buildPageURL(pageNum int) string {
 	return f.baseURL + fmt.Sprintf(f.pagePattern, pageNum)
 }
 
-// shouldStopPagination checks if pagination should stop by checking if the page exists and has content
-func (f *PageRangeGenerator) shouldStopPagination(ctx context.Context, currentPage int, pageURL string) (bool, error) {
+// shouldStopPagination checks if pagination should stop
+// If numberOfPages > 0, stops when we've reached the target number of pages
+// Otherwise, checks if the page exists and has content
+func (f *PageRangeGenerator) shouldStopPagination(ctx context.Context, currentPage int, pageURL string, useBaseURLForPage1 bool) (bool, error) {
+	// If numberOfPages is specified, check if we've reached the target
+	if f.numberOfPages > 0 {
+		if useBaseURLForPage1 {
+			// We already added base URL as page 1, so count from page 2
+			// If we're on page 2 and numberOfPages is 1, we should stop (already have 1 page)
+			// If we're on page 3 and numberOfPages is 2, we should stop (already have 2 pages)
+			// So: currentPage - 1 >= numberOfPages means we've generated enough
+			if currentPage-1 >= f.numberOfPages {
+				log.Printf("PageRangeGenerator: Reached target of %d pages - stopping pagination", f.numberOfPages)
+				return true, nil
+			}
+		} else {
+			// We start from page 1, so if currentPage > numberOfPages, we've generated enough
+			if currentPage > f.numberOfPages {
+				log.Printf("PageRangeGenerator: Reached target of %d pages - stopping pagination", f.numberOfPages)
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	// Otherwise, check existence for each page
 	exists, err := f.checkPageExists(pageURL)
 	if err != nil {
 		log.Printf("PageRangeGenerator: Error checking page %d: %v - stopping pagination", currentPage, err)
@@ -238,6 +290,71 @@ func (f *PageRangeGenerator) shouldStopDueToEmptyContent(ctx context.Context, cu
 		return true, nil
 	}
 	return false, nil
+}
+
+// shouldUseBaseURLForPage1 checks if page 1 with pattern returns 404 or contains "not found"
+// Returns true if base URL should be used for page 1, false otherwise
+func (f *PageRangeGenerator) shouldUseBaseURLForPage1(ctx context.Context, page1URL string) (bool, error) {
+	// First check if page exists
+	exists, err := f.checkPageExists(page1URL)
+	if err != nil {
+		// Network error - assume page doesn't exist
+		return true, nil
+	}
+	if !exists {
+		// Page 1 with pattern doesn't exist (404), use base URL
+		return true, nil
+	}
+
+	// Page exists, but check if it contains "not found" indicators
+	hasContent, err := f.checkPageContentForNotFound(page1URL)
+	if err != nil {
+		// Error checking content - assume page is valid
+		return false, nil
+	}
+	if !hasContent {
+		// Page contains "not found" indicators, use base URL
+		return true, nil
+	}
+
+	// Page 1 with pattern is valid, use it
+	return false, nil
+}
+
+// checkPageContentForNotFound fetches the page content and checks if it contains "not found" indicators
+// Returns true if content is valid, false if "not found" indicators found
+func (f *PageRangeGenerator) checkPageContentForNotFound(pageURL string) (bool, error) {
+	resp, err := f.httpClient.Get(pageURL)
+	if err != nil {
+		return false, fmt.Errorf("failed to fetch page: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	bodyStr := strings.ToLower(string(body))
+
+	// Check for "not found" indicators
+	notFoundMarkers := []string{"not found", "404", "page not found", "nothing found", "no results found"}
+	for _, marker := range notFoundMarkers {
+		if strings.Contains(bodyStr, marker) {
+			log.Printf("PageRangeGenerator: Found 'not found' marker '%s' in page 1", marker)
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 // checkPageContent fetches the page content and checks if it contains empty content markers

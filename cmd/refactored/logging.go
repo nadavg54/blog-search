@@ -17,7 +17,7 @@ func logPipelineConfig(pipelineType string, urlFetcherWorkers, contentWorkers in
 }
 
 // logPaginationConfig logs the configuration for pagination pipelines
-func logPaginationConfig(baseURL, pagePattern, extractorType string, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers int, filters []urls.UrlFilter) {
+func logPaginationConfig(baseURL, pagePattern, extractorType string, pagesPerBatch, pageGenWorkers, urlFetcherWorkers, contentWorkers, numberOfPages int, filters []urls.UrlFilter) {
 	log.Printf("Running Pagination pipeline for %s with pattern %s:", baseURL, pagePattern)
 
 	extractorName := extractorType
@@ -34,6 +34,11 @@ func logPaginationConfig(baseURL, pagePattern, extractorType string, pagesPerBat
 	log.Printf("  Page Generator Workers: %d", pageGenWorkers)
 	log.Printf("  URL Fetcher Workers: %d", urlFetcherWorkers)
 	log.Printf("  Content Workers: %d", contentWorkers)
+	if numberOfPages > 0 {
+		log.Printf("  Number of pages: %d (fixed, existence checks bypassed)", numberOfPages)
+	} else {
+		log.Printf("  Number of pages: unlimited (will check existence for each page)")
+	}
 	if len(filters) > 0 {
 		log.Printf("  Applied %d URL filter(s)", len(filters))
 	}
@@ -73,7 +78,7 @@ func logHTMLFileConfig(htmlFilePath, extractorType string, urlFetcherWorkers, co
 }
 
 // logDirectPageConfig logs the configuration for direct page pipelines
-func logDirectPageConfig(baseURL, pagePattern, extractorType string, pagesPerBatch, pageGenWorkers, contentWorkers int) {
+func logDirectPageConfig(baseURL, pagePattern, extractorType string, pagesPerBatch, pageGenWorkers, contentWorkers, numberOfPages int) {
 	log.Printf("Running Direct Page pipeline for %s with pattern %s:", baseURL, pagePattern)
 
 	extractorName := extractorType
@@ -89,6 +94,11 @@ func logDirectPageConfig(baseURL, pagePattern, extractorType string, pagesPerBat
 	log.Printf("  Pages per batch: %d", pagesPerBatch)
 	log.Printf("  Page Generator Workers: %d", pageGenWorkers)
 	log.Printf("  Content Workers: %d", contentWorkers)
+	if numberOfPages > 0 {
+		log.Printf("  Number of pages: %d (fixed, existence checks bypassed)", numberOfPages)
+	} else {
+		log.Printf("  Number of pages: unlimited (will check existence for each page)")
+	}
 	log.Printf("  Note: Page URLs are processed directly as articles (no URL extraction step)")
 }
 

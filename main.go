@@ -255,14 +255,16 @@ func buildPaginationPipeline(dbClient *db.Client, args []string, filters []urls.
 
 	// Use DataEngineeringPodcastPipelineBuilder if URL is for dataengineeringpodcast.com
 	// This ensures transcript extraction is used instead of general content extraction
+	// numberOfPages defaults to 0 (unlimited, check existence) for backward compatibility
+	numberOfPages := 0
 	var p *pipeline.Pipeline
 	if strings.Contains(baseURLArg, "dataengineeringpodcast.com") {
-		p = pipeline.DataEngineeringPodcastPipelineBuilder(dbClient, baseURLArg, pagePattern, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, extractor, filters...)
+		p = pipeline.DataEngineeringPodcastPipelineBuilder(dbClient, baseURLArg, pagePattern, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, numberOfPages, extractor, filters...)
 		log.Printf("Using DataEngineeringPodcastPipelineBuilder (with transcript extraction)")
 	} else {
-		p = pipeline.PaginationPipelineBuilder(dbClient, baseURLArg, pagePattern, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, extractor, filters...)
+		p = pipeline.PaginationPipelineBuilder(dbClient, baseURLArg, pagePattern, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, numberOfPages, extractor, filters...)
 	}
-	logPaginationConfig(baseURLArg, pagePattern, args, extractor, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, filters)
+	logPaginationConfig(baseURLArg, pagePattern, args, extractor, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, numberOfPages, filters)
 
 	return p, baseURLArg
 }
@@ -416,7 +418,7 @@ func logPipelineConfig(pipelineType string, urlFetcherWorkers, contentWorkers in
 }
 
 // logPaginationConfig logs the pagination pipeline configuration
-func logPaginationConfig(baseURL, pagePattern string, args []string, extractor urls.URLExtractor, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers int, filters []urls.UrlFilter) {
+func logPaginationConfig(baseURL, pagePattern string, args []string, extractor urls.URLExtractor, pagesPerBatch, pageGenWorkers, htmlFetcherWorkers, contentWorkers, numberOfPages int, filters []urls.UrlFilter) {
 	log.Printf("Running Pagination pipeline for %s with pattern %s:", baseURL, pagePattern)
 
 	extractorName := "se-radio (default)"
@@ -431,6 +433,11 @@ func logPaginationConfig(baseURL, pagePattern string, args []string, extractor u
 	log.Printf("  Page Generator Workers: %d", pageGenWorkers)
 	log.Printf("  HTML Fetcher Workers: %d", htmlFetcherWorkers)
 	log.Printf("  Content Workers: %d", contentWorkers)
+	if numberOfPages > 0 {
+		log.Printf("  Number of pages: %d (fixed, existence checks bypassed)", numberOfPages)
+	} else {
+		log.Printf("  Number of pages: unlimited (will check existence for each page)")
+	}
 	if len(filters) > 0 {
 		log.Printf("  Applied %d URL filter(s)", len(filters))
 	}

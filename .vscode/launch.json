@@ -93,11 +93,12 @@
             "program": "${workspaceFolder}/cmd/refactored",
             "args": [
                 "pipeline",
-                "directpage",
-                "-url=https://changelog.com/podcast/",
+                "paginate",
+                "-url=https://rockthejvm.com/articles/",
                 "-pattern=%d",
                 "-extractor=generic",
-                "-url-filter=https://changelog.com/podcast/"
+                "--number-of-pages=25"
+               
             ],
             "env": {
                 "MONGO_URI": "${env:MONGO_URI}"
