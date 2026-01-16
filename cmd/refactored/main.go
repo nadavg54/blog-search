@@ -66,17 +66,21 @@ func runReplication() {
 	}()
 
 	var dbProvider db.DBProvider
+	localPostgresDSN := os.Getenv("LOCAL_POSTGRES_DSN")
 	supabaseConnStr := os.Getenv("SUPABASE_CONNECTION_STRING")
 	postgresDSN := os.Getenv("POSTGRES_DSN")
 
-	dsn := supabaseConnStr
+	dsn := localPostgresDSN
+	if dsn == "" {
+		dsn = supabaseConnStr
+	}
 	if dsn == "" {
 		dsn = postgresDSN
 	}
 
 	if dsn == "" {
 		log.Fatalf("Database connection required for replication.\n" +
-			"Set either SUPABASE_CONNECTION_STRING or POSTGRES_DSN environment variable.")
+			"Set one of: LOCAL_POSTGRES_DSN, SUPABASE_CONNECTION_STRING, or POSTGRES_DSN environment variable.")
 	}
 
 	pg := db.NewPostgresClient(db.PostgresConfig{DSN: dsn})
@@ -291,10 +295,11 @@ func buildCategoryPipeline(dbClient *db.Client, args Args, filters []urls.UrlFil
 // ============================================================================
 
 func buildHTMLFilePipeline(dbClient *db.Client, args Args, filters []urls.UrlFilter) (*pipeline.Pipeline, string) {
-	usage := "Usage: go run ./cmd/refactored pipeline htmlfile -file=<html-file-path> -extractor=<type> [-url-fetcher-workers=<n>] [-content-workers=<n>] [-client-type=<browser|cloudflare>] [-url-filter=<path>]"
+	usage := "Usage: go run ./cmd/refactored pipeline htmlfile -file=<html-file-path> -extractor=<type> [-base-url=<base-url>] [-url-fetcher-workers=<n>] [-content-workers=<n>] [-client-type=<browser|cloudflare>] [-url-filter=<path>]"
 
 	htmlFile := args.RequireString("file", usage)
 	extractorType := args.RequireString("extractor", usage)
+	baseURL := args.GetString("base-url", "")
 	urlFetcherWorkers := args.GetInt("url-fetcher-workers", 1)
 	contentWorkers := args.GetInt("content-workers", 5)
 	clientTypeStr := args.GetString("client-type", "cloudflare")
@@ -306,8 +311,14 @@ func buildHTMLFilePipeline(dbClient *db.Client, args Args, filters []urls.UrlFil
 
 	clientType := parseClientType(clientTypeStr, httpclient.CloudflareClient)
 
-	p := pipeline.HTMLFilePipelineBuilderWithClient(dbClient, urlFetcherWorkers, contentWorkers, extractor, clientType, filters...)
-	logHTMLFileConfig(htmlFile, extractorType, urlFetcherWorkers, contentWorkers, clientType, filters)
+	var p *pipeline.Pipeline
+	if baseURL != "" {
+		p = pipeline.HTMLFilePipelineBuilderWithClientAndBaseURL(dbClient, urlFetcherWorkers, contentWorkers, extractor, clientType, baseURL, filters...)
+		logHTMLFileConfig(htmlFile, extractorType, urlFetcherWorkers, contentWorkers, clientType, filters, baseURL)
+	} else {
+		p = pipeline.HTMLFilePipelineBuilderWithClient(dbClient, urlFetcherWorkers, contentWorkers, extractor, clientType, filters...)
+		logHTMLFileConfig(htmlFile, extractorType, urlFetcherWorkers, contentWorkers, clientType, filters, "")
+	}
 
 	return p, htmlFile
 }

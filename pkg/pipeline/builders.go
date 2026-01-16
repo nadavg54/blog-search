@@ -151,12 +151,23 @@ func HTMLFilePipelineBuilder(dbClient *db.Client, urlFetcherWorkers, contentWork
 // Pass the HTML file path as the baseURL parameter when calling Run()
 // extractor: function to extract URLs from the HTML content
 // clientType: HTTP client type to use for fetching content (BrowserClient or CloudflareClient)
+// baseURL: optional base URL for resolving relative URLs extracted from the HTML file
 func HTMLFilePipelineBuilderWithClient(dbClient *db.Client, urlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, clientType httpclient.ClientType, filters ...urls.UrlFilter) *Pipeline {
+	return HTMLFilePipelineBuilderWithClientAndBaseURL(dbClient, urlFetcherWorkers, contentWorkers, extractor, clientType, "", filters...)
+}
+
+// HTMLFilePipelineBuilderWithClientAndBaseURL builds a pipeline for extracting URLs from a local HTML file with a specific client type and base URL
+// Pipeline: HTML File Path → [HTML File Fetcher] → [Content Consumer]
+// Pass the HTML file path as the baseURL parameter when calling Run()
+// extractor: function to extract URLs from the HTML content
+// clientType: HTTP client type to use for fetching content (BrowserClient or CloudflareClient)
+// baseURL: base URL for resolving relative URLs extracted from the HTML file
+func HTMLFilePipelineBuilderWithClientAndBaseURL(dbClient *db.Client, urlFetcherWorkers, contentWorkers int, extractor urls.URLExtractor, clientType httpclient.ClientType, baseURL string, filters ...urls.UrlFilter) *Pipeline {
 	var fetcher URLFetcher
 	if len(filters) > 0 {
-		fetcher = NewHTMLPageFetcherWithFilters(extractor, filters)
+		fetcher = NewHTMLPageFetcherWithFiltersAndBaseURL(extractor, baseURL, filters)
 	} else {
-		fetcher = NewHTMLPageFetcher(extractor)
+		fetcher = NewHTMLPageFetcherWithBaseURL(extractor, baseURL)
 	}
 
 	step := PipelineStep{

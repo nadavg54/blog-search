@@ -21,6 +21,7 @@ type HTMLFetcher struct {
 	client     *httpclient.HTTPClient
 	extractor  URLExtractor
 	clientType httpclient.ClientType
+	baseURL    string // Optional base URL for resolving relative URLs
 }
 
 // NewHTMLFetcher creates a new HTML fetcher with the given extractor function
@@ -35,6 +36,17 @@ func NewHTMLFetcherWithClient(extractor URLExtractor, clientType httpclient.Clie
 		client:     httpclient.NewClient(clientType),
 		extractor:  extractor,
 		clientType: clientType,
+		baseURL:    "",
+	}
+}
+
+// NewHTMLFetcherWithBaseURL creates a new HTML fetcher with a base URL for resolving relative URLs
+func NewHTMLFetcherWithBaseURL(extractor URLExtractor, clientType httpclient.ClientType, baseURL string) *HTMLFetcher {
+	return &HTMLFetcher{
+		client:     httpclient.NewClient(clientType),
+		extractor:  extractor,
+		clientType: clientType,
+		baseURL:    baseURL,
 	}
 }
 
@@ -52,6 +64,11 @@ func (f *HTMLFetcher) Fetch(url string) ([]URL, error) {
 
 	if len(urls) == 0 {
 		return nil, fmt.Errorf("no URLs found in HTML")
+	}
+
+	// If base URL is provided, resolve relative URLs
+	if f.baseURL != "" {
+		urls = f.resolveRelativeURLs(urls, f.baseURL)
 	}
 
 	return urls, nil
@@ -166,6 +183,27 @@ func (f *HTMLFetcher) extractURLsFromHTML(html string) ([]URL, error) {
 	}
 
 	return f.extractor(html)
+}
+
+// resolveRelativeURLs resolves relative URLs by concatenating them with the base URL
+func (f *HTMLFetcher) resolveRelativeURLs(urls []URL, baseURL string) []URL {
+	resolved := make([]URL, 0, len(urls))
+	for _, u := range urls {
+		resolvedURL := u
+		// If URL is already absolute, keep it as-is
+		if strings.HasPrefix(u.Location, "http://") || strings.HasPrefix(u.Location, "https://") {
+			resolved = append(resolved, resolvedURL)
+			continue
+		}
+
+		// Concatenate base URL with the relative URL
+		// Remove trailing slash from baseURL and leading slash from relative URL to avoid double slashes
+		base := strings.TrimSuffix(baseURL, "/")
+		relative := strings.TrimPrefix(u.Location, "/")
+		resolvedURL.Location = base + "/" + relative
+		resolved = append(resolved, resolvedURL)
+	}
+	return resolved
 }
 
 // ExtractSERadioURLs extracts article URLs from se-radio.net HTML pages

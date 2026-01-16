@@ -66,9 +66,12 @@ func logCategoryConfig(baseURL string, categories []string, extractorType string
 }
 
 // logHTMLFileConfig logs the configuration for HTML file pipelines
-func logHTMLFileConfig(htmlFilePath, extractorType string, urlFetcherWorkers, contentWorkers int, clientType httpclient.ClientType, filters []urls.UrlFilter) {
+func logHTMLFileConfig(htmlFilePath, extractorType string, urlFetcherWorkers, contentWorkers int, clientType httpclient.ClientType, filters []urls.UrlFilter, baseURL string) {
 	log.Printf("Running HTML File pipeline for file: %s", htmlFilePath)
 	log.Printf("  Extractor: %s", extractorType)
+	if baseURL != "" {
+		log.Printf("  Base URL: %s (for resolving relative URLs)", baseURL)
+	}
 	log.Printf("  URL Fetcher Workers: %d", urlFetcherWorkers)
 	log.Printf("  Content Workers: %d", contentWorkers)
 	log.Printf("  HTTP Client Type: %s", clientType)

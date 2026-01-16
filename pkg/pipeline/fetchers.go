@@ -121,10 +121,22 @@ func NewHTMLPageFetcher(extractor urls.URLExtractor) *BasicUrlFetcher {
 	return NewBasicURLFetcher(urls.NewHTMLFetcher(extractor))
 }
 
+// NewHTMLPageFetcherWithBaseURL creates a BasicUrlFetcher for HTML pages with a base URL
+// This is a convenience function that wraps HTMLFetcher (which implements URLsFetcher)
+func NewHTMLPageFetcherWithBaseURL(extractor urls.URLExtractor, baseURL string) *BasicUrlFetcher {
+	return NewBasicURLFetcher(urls.NewHTMLFetcherWithBaseURL(extractor, httpclient.CloudflareClient, baseURL))
+}
+
 // NewHTMLPageFetcherWithFilters creates a BasicUrlFetcher for HTML pages with filters
 // This is a convenience function that wraps HTMLFetcher (which implements URLsFetcher)
 func NewHTMLPageFetcherWithFilters(extractor urls.URLExtractor, filters []urls.UrlFilter) *BasicUrlFetcher {
 	return NewBasicURLFetcherWithFilters(urls.NewHTMLFetcher(extractor), filters)
+}
+
+// NewHTMLPageFetcherWithFiltersAndBaseURL creates a BasicUrlFetcher for HTML pages with filters and base URL
+// This is a convenience function that wraps HTMLFetcher (which implements URLsFetcher)
+func NewHTMLPageFetcherWithFiltersAndBaseURL(extractor urls.URLExtractor, baseURL string, filters []urls.UrlFilter) *BasicUrlFetcher {
+	return NewBasicURLFetcherWithFilters(urls.NewHTMLFetcherWithBaseURL(extractor, httpclient.CloudflareClient, baseURL), filters)
 }
 
 // PageRangeGenerator generates page URLs from a base URL and page pattern

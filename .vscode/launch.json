@@ -10,6 +10,7 @@
             "args": ["replicate"],
             "env": {
                 "MONGO_URI": "${env:MONGO_URI}",
+                "LOCAL_POSTGRES_DSN": "${env:LOCAL_POSTGRES_DSN}",
                 "SUPABASE_CONNECTION_STRING": "${env:SUPABASE_CONNECTION_STRING}"
             },
             "console": "integratedTerminal"
@@ -53,7 +54,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "[REFACTORED] replicate from mongo to supabase",
+            "name": "[REFACTORED] replicate from mongo to local or supabase",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -61,6 +62,7 @@
             "args": ["replicate"],
             "env": {
                 "MONGO_URI": "${env:MONGO_URI}",
+                "LOCAL_POSTGRES_DSN": "postgres://myuser:mypassword@localhost:5432/mydatabase",
                 "SUPABASE_CONNECTION_STRING": "${env:SUPABASE_CONNECTION_STRING}"
             },
             "console": "integratedTerminal"
@@ -74,11 +76,12 @@
             "args": [
                 "pipeline",
                 "htmlfile",
-                "-file=html-page-examples/pintrest.html",
+                "-file=html-page-examples/twitter.html",
                 "-extractor=generic",
                 "-url-fetcher-workers=1",
-                "-content-workers=5",
-                "-client-type=browser"
+                "-content-workers=2",
+                "-client-type=browser",
+                "-base-url=https://blog.x.com/"
             ],
             "env": {
                 "MONGO_URI": "${env:MONGO_URI}"
